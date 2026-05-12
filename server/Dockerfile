@@ -1,5 +1,11 @@
+FROM gradle:8.14.3-jdk21 AS build
+WORKDIR /workspace
+COPY . .
+RUN ./gradlew :server:buildFatJar :composeApp:composeCompatibilityBrowserDistribution --no-daemon
+
 FROM eclipse-temurin:21-jre
 EXPOSE 8080
 WORKDIR /app
-COPY build/libs/fat.jar /app/app.jar
+COPY --from=build /workspace/server/build/libs/fat.jar /app/app.jar
+COPY --from=build /workspace/composeApp/build/dist/composeWebCompatibility/productionExecutable /app/web
 ENTRYPOINT ["java","-jar","/app/app.jar"]

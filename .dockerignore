@@ -1,0 +1,7 @@
+.gradle
+**/build
+.idea
+kotlin-js-store
+server/files
+files
+local.properties

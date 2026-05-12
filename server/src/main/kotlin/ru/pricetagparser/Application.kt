@@ -22,6 +22,7 @@ import io.ktor.server.routing.routing
 import java.io.File
 
 private val filesDirectory = File("files")
+private val webDirectory = File(System.getenv("WEB_DIR") ?: "web")
 
 fun main() {
     val serverPort = System.getenv("SERVER_PORT")?.toIntOrNull() ?: SERVER_PORT
@@ -34,7 +35,12 @@ fun Application.module() {
 
     routing {
         get("/") {
-            call.respondText("Ktor: ${Greeting().greet()}")
+            val indexFile = webDirectory.resolve("index.html")
+            if (indexFile.exists()) {
+                call.respond(LocalFileContent(indexFile, ContentType.Text.Html))
+            } else {
+                call.respondText("Ktor: ${Greeting().greet()}")
+            }
         }
 
         get("/api/files") {
@@ -83,6 +89,17 @@ fun Application.module() {
                     text = "{\"name\":\"${uploadedFileName.escapeJson()}\"}",
                     contentType = ContentType.Application.Json,
                 )
+            }
+        }
+
+        get("/{path...}") {
+            val path = call.parameters.getAll("path").orEmpty().joinToString("/")
+            val requestedFile = webDirectory.resolve(path).canonicalFile
+            val rootDirectory = webDirectory.canonicalFile
+            if (requestedFile.isFile && requestedFile.toPath().startsWith(rootDirectory.toPath())) {
+                call.respond(LocalFileContent(requestedFile))
+            } else {
+                call.respond(HttpStatusCode.NotFound)
             }
         }
     }
