@@ -7,6 +7,7 @@ import kotlinx.coroutines.await
 import kotlinx.coroutines.launch
 import org.w3c.dom.HTMLInputElement
 import org.w3c.dom.asList
+import org.w3c.fetch.RequestInit
 import org.w3c.xhr.FormData
 import kotlin.js.Json
 
@@ -44,7 +45,13 @@ internal actual fun pickAndUploadFile(
                 try {
                     val formData = FormData()
                     formData.append("file", file)
-                    val response = window.fetch("/api/upload", js("({ method: 'POST', body: formData })")).await()
+                    val response = window.fetch(
+                        input = "/api/upload",
+                        init = RequestInit(
+                            method = "POST",
+                            body = formData,
+                        ),
+                    ).await()
                     if (!response.ok) error("Upload failed")
                     onUploaded()
                 } catch (_: Throwable) {
