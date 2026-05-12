@@ -11,6 +11,7 @@ import io.ktor.server.application.Application
 import io.ktor.server.engine.embeddedServer
 import io.ktor.server.http.content.LocalFileContent
 import io.ktor.server.netty.Netty
+import io.ktor.server.request.header
 import io.ktor.server.request.receiveMultipart
 import io.ktor.server.response.header
 import io.ktor.server.response.respond
@@ -20,6 +21,11 @@ import io.ktor.server.routing.get
 import io.ktor.server.routing.post
 import io.ktor.server.routing.routing
 import java.io.File
+import java.io.InputStream
+import java.io.OutputStream
+
+private const val MAX_UPLOAD_SIZE_BYTES = 500L * 1024L * 1024L
+private const val MAX_MULTIPART_OVERHEAD_BYTES = 2L * 1024L * 1024L
 
 private val filesDirectory = File("files")
 private val webDirectory = File(System.getenv("WEB_DIR") ?: "web")
@@ -66,23 +72,38 @@ fun Application.module() {
         }
 
         post("/api/upload") {
+            val contentLength = call.request.header(HttpHeaders.ContentLength)?.toLongOrNull()
+            if (contentLength != null && contentLength > MAX_UPLOAD_SIZE_BYTES + MAX_MULTIPART_OVERHEAD_BYTES) {
+                call.respond(HttpStatusCode.PayloadTooLarge)
+                return@post
+            }
+
             var uploadedFileName = ""
-            call.receiveMultipart().forEachPart { part ->
+            var uploadTooLarge = false
+            call.receiveMultipart(formFieldLimit = MAX_UPLOAD_SIZE_BYTES).forEachPart { part ->
                 if (part is PartData.FileItem) {
                     val fileName = part.originalFileName?.safeFileName().orEmpty()
                     if (fileName.isNotBlank()) {
-                        part.provider().toInputStream().use { input ->
-                            filesDirectory.resolve(fileName).outputStream().use { output ->
-                                input.copyTo(output)
+                        val targetFile = filesDirectory.resolve(fileName)
+                        try {
+                            part.provider().toInputStream().use { input ->
+                                targetFile.outputStream().use { output ->
+                                    input.copyToWithLimit(output, MAX_UPLOAD_SIZE_BYTES)
+                                }
                             }
+                            uploadedFileName = fileName
+                        } catch (_: UploadTooLargeException) {
+                            uploadTooLarge = true
+                            targetFile.delete()
                         }
-                        uploadedFileName = fileName
                     }
                 }
                 part.dispose()
             }
 
-            if (uploadedFileName.isBlank()) {
+            if (uploadTooLarge) {
+                call.respond(HttpStatusCode.PayloadTooLarge)
+            } else if (uploadedFileName.isBlank()) {
                 call.respond(HttpStatusCode.BadRequest)
             } else {
                 call.respondText(
@@ -102,6 +123,23 @@ fun Application.module() {
                 call.respond(HttpStatusCode.NotFound)
             }
         }
+    }
+}
+
+private class UploadTooLargeException : RuntimeException()
+
+private fun InputStream.copyToWithLimit(
+    output: OutputStream,
+    limit: Long,
+) {
+    val buffer = ByteArray(DEFAULT_BUFFER_SIZE)
+    var copied = 0L
+    while (true) {
+        val bytes = read(buffer)
+        if (bytes < 0) break
+        copied += bytes
+        if (copied > limit) throw UploadTooLargeException()
+        output.write(buffer, 0, bytes)
     }
 }
 

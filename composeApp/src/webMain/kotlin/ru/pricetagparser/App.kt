@@ -45,6 +45,8 @@ internal data class PriceFile(
     val name: String,
     val csvName: String,
     val hasCsv: Boolean,
+    val uploadProgress: Int? = null,
+    val uploadFailed: Boolean = false,
 )
 
 @Composable
@@ -55,6 +57,10 @@ fun App() {
         var isLoading by remember { mutableStateOf(true) }
         var isUploading by remember { mutableStateOf(false) }
         var errorMessage by remember { mutableStateOf<String?>(null) }
+
+        fun replaceFile(file: PriceFile) {
+            files = listOf(file) + files.filterNot { it.name == file.name }
+        }
 
         suspend fun loadFiles() {
             isLoading = true
@@ -99,8 +105,8 @@ fun App() {
                         colors = CardDefaults.cardColors(containerColor = Color.White),
                     ) {
                         when {
-                            isLoading -> LoadingState()
-                            errorMessage != null -> ErrorState(
+                            isLoading && files.isEmpty() -> LoadingState()
+                            errorMessage != null && files.isEmpty() -> ErrorState(
                                 message = errorMessage.orEmpty(),
                                 onRetry = {
                                     scope.launchSafely {
@@ -124,13 +130,43 @@ fun App() {
                         pickAndUploadFile(
                             scope = scope,
                             onUploadingChanged = { isUploading = it },
+                            onUploadStarted = { fileName ->
+                                replaceFile(
+                                    PriceFile(
+                                        name = fileName,
+                                        csvName = fileName.substringBeforeLast('.') + ".csv",
+                                        hasCsv = false,
+                                        uploadProgress = 0,
+                                    ),
+                                )
+                            },
+                            onUploadProgress = { fileName, progress ->
+                                replaceFile(
+                                    PriceFile(
+                                        name = fileName,
+                                        csvName = fileName.substringBeforeLast('.') + ".csv",
+                                        hasCsv = false,
+                                        uploadProgress = progress,
+                                    ),
+                                )
+                            },
                             onUploaded = {
                                 scope.launchSafely {
                                     loadFiles()
                                 }
                             },
-                            onError = {
+                            onError = { fileName ->
                                 errorMessage = "Не удалось загрузить файл"
+                                if (fileName.isNotBlank()) {
+                                    replaceFile(
+                                        PriceFile(
+                                            name = fileName,
+                                            csvName = fileName.substringBeforeLast('.') + ".csv",
+                                            hasCsv = false,
+                                            uploadFailed = true,
+                                        ),
+                                    )
+                                }
                             },
                         )
                     },
@@ -219,12 +255,26 @@ private fun FileRow(index: Int, file: PriceFile) {
             fontWeight = FontWeight.Medium,
         )
         Spacer(modifier = Modifier.width(16.dp))
-        if (file.hasCsv) {
-            Button(onClick = { downloadCsv(file.name) }) {
+        when {
+            file.uploadFailed -> Text(
+                text = "Ошибка загрузки",
+                color = MaterialTheme.colorScheme.error,
+            )
+
+            file.uploadProgress != null -> Row(verticalAlignment = Alignment.CenterVertically) {
+                CircularProgressIndicator(
+                    modifier = Modifier.size(22.dp),
+                    strokeWidth = 2.dp,
+                )
+                Spacer(modifier = Modifier.width(8.dp))
+                Text("Загрузка ${file.uploadProgress}%")
+            }
+
+            file.hasCsv -> Button(onClick = { downloadCsv(file.name) }) {
                 Text("Скачать")
             }
-        } else {
-            Row(verticalAlignment = Alignment.CenterVertically) {
+
+            else -> Row(verticalAlignment = Alignment.CenterVertically) {
                 CircularProgressIndicator(
                     modifier = Modifier.size(22.dp),
                     strokeWidth = 2.dp,
@@ -391,6 +441,8 @@ internal expect fun downloadCsv(fileName: String)
 internal expect fun pickAndUploadFile(
     scope: CoroutineScope,
     onUploadingChanged: (Boolean) -> Unit,
+    onUploadStarted: (String) -> Unit,
+    onUploadProgress: (String, Int) -> Unit,
     onUploaded: () -> Unit,
-    onError: () -> Unit,
+    onError: (String) -> Unit,
 )

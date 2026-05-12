@@ -28,8 +28,10 @@ internal actual fun downloadCsv(fileName: String) {
 internal actual fun pickAndUploadFile(
     scope: CoroutineScope,
     onUploadingChanged: (Boolean) -> Unit,
+    onUploadStarted: (String) -> Unit,
+    onUploadProgress: (String, Int) -> Unit,
     onUploaded: () -> Unit,
-    onError: () -> Unit,
+    onError: (String) -> Unit,
 ) {
     val input = (document.createElement("input") as HTMLInputElement).apply {
         type = "file"
@@ -39,6 +41,7 @@ internal actual fun pickAndUploadFile(
         if (file != null) {
             scope.launch {
                 onUploadingChanged(true)
+                onUploadStarted(file.name)
                 try {
                     val formData = FormData()
                     formData.append("file", file)
@@ -50,9 +53,10 @@ internal actual fun pickAndUploadFile(
                         ),
                     ).await<Response>()
                     if (!response.ok) error("Upload failed")
+                    onUploadProgress(file.name, 100)
                     onUploaded()
                 } catch (_: Throwable) {
-                    onError()
+                    onError(file.name)
                 } finally {
                     onUploadingChanged(false)
                 }
