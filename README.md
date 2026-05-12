@@ -28,6 +28,38 @@ in your IDE’s toolbar or run it directly from the terminal:
   .\gradlew.bat :server:run
   ```
 
+### Build and Run Server with Docker Compose
+
+Build the server fat jar before creating the Docker image:
+- on macOS/Linux
+  ```shell
+  ./gradlew :server:buildFatJar
+  ```
+- on Windows
+  ```shell
+  .\gradlew.bat :server:buildFatJar
+  ```
+
+Run the server from the `server` directory:
+```shell
+cd server
+docker compose up --build
+```
+
+Run the server in the background:
+```shell
+cd server
+docker compose up --build -d
+```
+
+Stop the server:
+```shell
+cd server
+docker compose down
+```
+
+The server is available at `http://localhost:8080`, and uploaded files are stored in `server/files`.
+
 ### Build and Run Web Application
 
 To build and run the development version of the web app, use the run configuration from the run widget
