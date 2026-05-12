@@ -1,5 +1,7 @@
 package ru.pricetagparser
 
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -34,6 +36,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
@@ -166,6 +169,38 @@ private fun FileList(files: List<PriceFile>) {
     }
 }
 
+@Suppress("unused")
+@Preview
+@Composable
+private fun FileListPreview() {
+    MaterialTheme {
+        Surface(color = Color(0xFFF6F7FB)) {
+            Card(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(24.dp),
+                shape = RoundedCornerShape(24.dp),
+                colors = CardDefaults.cardColors(containerColor = Color.White),
+            ) {
+                FileList(
+                    files = listOf(
+                        PriceFile(
+                            name = "price-tag-photo.jpg",
+                            csvName = "price-tag-photo.csv",
+                            hasCsv = true,
+                        ),
+                        PriceFile(
+                            name = "shelf-video.mp4",
+                            csvName = "shelf-video.csv",
+                            hasCsv = false,
+                        ),
+                    ),
+                )
+            }
+        }
+    }
+}
+
 @Composable
 private fun FileRow(index: Int, file: PriceFile) {
     Row(
@@ -175,6 +210,8 @@ private fun FileRow(index: Int, file: PriceFile) {
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.SpaceBetween,
     ) {
+        FilePreviewIcon(fileName = file.name)
+        Spacer(modifier = Modifier.width(12.dp))
         Text(
             modifier = Modifier.weight(1f),
             text = "$index. ${file.name}",
@@ -195,6 +232,103 @@ private fun FileRow(index: Int, file: PriceFile) {
                 Spacer(modifier = Modifier.width(8.dp))
                 Text("Обработка")
             }
+        }
+    }
+}
+
+@Composable
+private fun FilePreviewIcon(fileName: String) {
+    val extension = fileName.substringAfterLast('.', missingDelimiterValue = "").lowercase()
+    val isImage = extension in imageExtensions
+    val isVideo = extension in videoExtensions
+    val backgroundColor = when {
+        isImage -> Color(0xFFE8F5E9)
+        isVideo -> Color(0xFFE3F2FD)
+        else -> Color(0xFFF1F3F4)
+    }
+    val borderColor = when {
+        isImage -> Color(0xFF66BB6A)
+        isVideo -> Color(0xFF42A5F5)
+        else -> Color(0xFFB0BEC5)
+    }
+    val label = when {
+        isImage -> "IMG"
+        isVideo -> "VID"
+        else -> "FILE"
+    }
+
+    Box(
+        modifier = Modifier
+            .size(44.dp)
+            .background(
+                color = backgroundColor,
+                shape = RoundedCornerShape(12.dp),
+            )
+            .border(
+                width = 1.dp,
+                color = borderColor,
+                shape = RoundedCornerShape(12.dp),
+            ),
+        contentAlignment = Alignment.Center,
+    ) {
+        Text(
+            text = label,
+            style = MaterialTheme.typography.labelSmall,
+            color = borderColor,
+            fontWeight = FontWeight.Bold,
+        )
+    }
+}
+
+private val imageExtensions = setOf(
+    "jpg",
+    "jpeg",
+    "png",
+    "gif",
+    "webp",
+    "bmp",
+)
+
+private val videoExtensions = setOf(
+    "mp4",
+    "mov",
+    "avi",
+    "mkv",
+    "webm",
+)
+
+@Suppress("unused")
+@Preview
+@Composable
+private fun CompletedFileRowPreview() {
+    MaterialTheme {
+        Surface(color = Color.White) {
+            FileRow(
+                index = 1,
+                file = PriceFile(
+                    name = "price-tag-photo.jpg",
+                    csvName = "price-tag-photo.csv",
+                    hasCsv = true,
+                ),
+            )
+        }
+    }
+}
+
+@Suppress("unused")
+@Preview
+@Composable
+private fun ProcessingFileRowPreview() {
+    MaterialTheme {
+        Surface(color = Color.White) {
+            FileRow(
+                index = 2,
+                file = PriceFile(
+                    name = "shelf-video.mp4",
+                    csvName = "shelf-video.csv",
+                    hasCsv = false,
+                ),
+            )
         }
     }
 }
