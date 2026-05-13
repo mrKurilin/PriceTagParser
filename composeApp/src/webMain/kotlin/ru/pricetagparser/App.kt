@@ -180,14 +180,12 @@ private fun startUpload(
         fileName: String,
         uploadProgress: Int? = null,
         uploadFailed: Boolean = false,
-        uploaded: Boolean = false,
     ) = PricesFile(
         name = fileName,
         csvName = fileName.substringBeforeLast('.') + ".csv",
         hasCsv = false,
         uploadProgress = uploadProgress,
         uploadFailed = uploadFailed,
-        uploaded = uploaded,
     )
 
     pickAndUploadFile(
@@ -199,10 +197,7 @@ private fun startUpload(
         onUploadProgress = { fileName, progress ->
             onFileChanged(uploadFileState(fileName, uploadProgress = progress))
         },
-        onUploaded = { fileName ->
-            onFileChanged(uploadFileState(fileName, uploaded = true))
-            onUploaded()
-        },
+        onUploaded = { onUploaded() },
         onError = { fileName ->
             onError()
             if (fileName.isNotBlank()) {
@@ -323,26 +318,23 @@ private fun FileRow(index: Int, file: PricesFile) {
                 Text("Загрузка ${file.uploadProgress}%")
             }
 
-            file.uploaded -> Text(
-                text = "✓",
-                color = MaterialTheme.colorScheme.primary,
-                style = MaterialTheme.typography.titleLarge,
-                fontWeight = FontWeight.Bold,
-            )
-        }
-
-        if (file.hasCsv) {
-            Button(onClick = { downloadCsv(file.name) }) {
-                Text("Скачать")
+            file.hasCsv -> {
+                Button(onClick = { downloadCsv(file.name) }) {
+                    Text("Скачать")
+                }
             }
-        } else {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                CircularProgressIndicator(
-                    modifier = Modifier.size(22.dp),
-                    strokeWidth = 2.dp,
-                )
-                Spacer(modifier = Modifier.width(8.dp))
-                Text("Обработка")
+
+            else -> {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    CircularProgressIndicator(
+                        modifier = Modifier.size(22.dp),
+                        strokeWidth = 2.dp,
+                    )
+
+                    Spacer(modifier = Modifier.width(8.dp))
+
+                    Text("Обработка")
+                }
             }
         }
     }
