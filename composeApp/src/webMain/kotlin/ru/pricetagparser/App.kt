@@ -186,7 +186,9 @@ private fun startUpload(
         onUploadProgress = { fileName, progress ->
             onFileChanged(uploadFileState(fileName, uploadProgress = progress))
         },
-        onUploaded = { onUploaded() },
+        onUploaded = {
+            onUploaded()
+        },
         onError = { fileName ->
             onError()
             if (fileName.isNotBlank()) {

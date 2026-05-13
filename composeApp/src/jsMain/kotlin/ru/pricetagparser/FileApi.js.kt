@@ -14,10 +14,16 @@ import kotlin.coroutines.resume
 import kotlin.js.Json
 
 internal actual suspend fun fetchFiles(): List<PricesFile> {
+    console.log("fetchFiles: starting fetch")
     val response = window.fetch("/api/files").await()
+    console.log("fetchFiles: response status=${response.status}, ok=${response.ok}")
     if (!response.ok) error("Files request failed")
-    val payload = response.json().await().unsafeCast<Array<Json>>()
+    val json = response.json().await()
+    console.log("fetchFiles: json parsed, type=${json.asDynamic().constructor.name}")
+    val payload = json.unsafeCast<Array<Json>>()
+    console.log("fetchFiles: payload length=${payload.length}")
     return payload.map { item ->
+        console.log("fetchFiles: mapping item name=${item["name"]}")
         PricesFile(
             name = item["name"] as String,
             csvName = item["csvName"] as String,
