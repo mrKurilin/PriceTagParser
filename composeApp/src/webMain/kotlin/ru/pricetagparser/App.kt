@@ -296,14 +296,18 @@ private fun FileRow(index: Int, file: PricesFile) {
         horizontalArrangement = Arrangement.SpaceBetween,
     ) {
         FilePreviewIcon(fileName = file.name)
+
         Spacer(modifier = Modifier.width(12.dp))
+
         Text(
             modifier = Modifier.weight(1f),
             text = "$index. ${file.name}",
             style = MaterialTheme.typography.titleMedium,
             fontWeight = FontWeight.Medium,
         )
+
         Spacer(modifier = Modifier.width(16.dp))
+
         when {
             file.uploadFailed -> Text(
                 text = "Ошибка загрузки",
@@ -319,16 +323,20 @@ private fun FileRow(index: Int, file: PricesFile) {
                 Text("Загрузка ${file.uploadProgress}%")
             }
 
-            file.hasCsv -> Button(onClick = { downloadCsv(file.name) }) {
+            file.uploaded -> Text(
+                text = "✓",
+                color = MaterialTheme.colorScheme.primary,
+                style = MaterialTheme.typography.titleLarge,
+                fontWeight = FontWeight.Bold,
+            )
+        }
+
+        if (file.hasCsv) {
+            Button(onClick = { downloadCsv(file.name) }) {
                 Text("Скачать")
             }
-
-            file.uploaded -> Text(
-                text = "Загружен",
-                color = MaterialTheme.colorScheme.primary,
-            )
-
-            else -> Row(verticalAlignment = Alignment.CenterVertically) {
+        } else {
+            Row(verticalAlignment = Alignment.CenterVertically) {
                 CircularProgressIndicator(
                     modifier = Modifier.size(22.dp),
                     strokeWidth = 2.dp,
