@@ -7,7 +7,6 @@ import kotlinx.coroutines.await
 import kotlinx.coroutines.launch
 import org.w3c.dom.HTMLInputElement
 import org.w3c.dom.asList
-import org.w3c.fetch.RequestInit
 import org.w3c.fetch.Response
 import org.w3c.xhr.FormData
 import kotlin.js.ExperimentalWasmJsInterop
@@ -56,12 +55,9 @@ internal actual fun pickAndUploadFile(
                     formData.append("file", file)
                     val url = apiUrl("/api/upload")
                     println("[FileApi] upload: fetch start url=$url, origin=${window.location.origin}")
-                    val response = window.fetch(
-                        input = url,
-                        init = RequestInit(
-                            method = "POST",
-                            body = formData,
-                        ),
+                    val response = uploadFetch(
+                        url = url,
+                        body = formData,
                     ).await<Response>()
                     println("[FileApi] upload: fetch response ok=${response.ok}, status=${response.status}, statusText=${response.statusText}")
                     if (!response.ok) error("Upload failed with status ${response.status}")
@@ -83,6 +79,10 @@ internal actual fun pickAndUploadFile(
     println("[FileApi] pickAndUploadFile: click input")
     input.click()
 }
+
+@OptIn(ExperimentalWasmJsInterop::class)
+@JsFun("(url, body) => fetch(url, { method: 'POST', body: body })")
+private external fun uploadFetch(url: String, body: FormData): Promise<JsAny?>
 
 private fun apiUrl(path: String): String =
     if (window.location.port == SERVER_PORT.toString()) {
