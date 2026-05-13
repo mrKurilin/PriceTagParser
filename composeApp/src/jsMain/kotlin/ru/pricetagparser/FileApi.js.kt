@@ -11,19 +11,23 @@ import org.w3c.dom.asList
 import org.w3c.xhr.FormData
 import org.w3c.xhr.XMLHttpRequest
 import kotlin.coroutines.resume
+import kotlin.js.ExperimentalWasmJsInterop
 import kotlin.js.Json
 
+@OptIn(ExperimentalWasmJsInterop::class)
 internal actual suspend fun fetchFiles(): List<PricesFile> {
-    console.log("fetchFiles: starting fetch")
+    console.log("[FileApi/JS] fetchFiles: starting fetch")
     val response = window.fetch("/api/files").await()
-    console.log("fetchFiles: response status=${response.status}, ok=${response.ok}")
+    console.log("[FileApi/JS] fetchFiles: response status=${response.status}, ok=${response.ok}")
     if (!response.ok) error("Files request failed")
     val json = response.json().await()
-    console.log("fetchFiles: json parsed, type=${json.asDynamic().constructor.name}")
+    console.log("[FileApi/JS] fetchFiles: json parsed")
     val payload = json.unsafeCast<Array<Json>>()
-    console.log("fetchFiles: payload length=${payload.length}")
+    console.log("[FileApi/JS] fetchFiles: payload length=${payload.length}")
+    payload.forEachIndexed { index, item ->
+        console.log("[FileApi/JS] fetchFiles: item[$index] name=${item["name"]}")
+    }
     return payload.map { item ->
-        console.log("fetchFiles: mapping item name=${item["name"]}")
         PricesFile(
             name = item["name"] as String,
             csvName = item["csvName"] as String,

@@ -18,10 +18,11 @@ import kotlin.js.Promise
 @OptIn(ExperimentalWasmJsInterop::class)
 internal actual suspend fun fetchFiles(): List<PricesFile> {
     val url = apiUrl("/api/files")
-    println("[FileApi] fetchFiles: origin=${window.location.origin}, url=$url")
+    println("[FileApi/WASM] fetchFiles: starting, url=$url")
     val response = window.fetch(url).await<Response>()
-    println("[FileApi] fetchFiles: response ok=${response.ok}, status=${response.status}")
+    println("[FileApi/WASM] fetchFiles: response ok=${response.ok}, status=${response.status}")
     val text = response.text().unsafeCast<Promise<JsAny?>>().await<JsAny?>().toString()
+    println("[FileApi/WASM] fetchFiles: raw text length=${text.length}, first 200=${text.take(200)}")
     return text.parseFilesJson()
 }
 
@@ -130,22 +131,25 @@ private fun apiUrl(path: String): String =
 private fun String.parseFilesJson(): List<PricesFile> {
     val trimmed = trim()
     if (trimmed.length <= 2) return emptyList()
-    return trimmed
+    val items = trimmed
         .removePrefix("[")
         .removeSuffix("]")
-        .split("},{")
+        .split(Regex("}\\s*,\\s*\\{"))
         .map { item -> item.removePrefix("{").removeSuffix("}") }
-        .map { item ->
-            val values = item
-                .split(",")
-                .associate { field ->
-                    val parts = field.split(":", limit = 2)
-                    parts.first().trim('"') to parts.last().trim('"')
-                }
-            PricesFile(
-                name = values.getValue("name"),
-                csvName = values.getValue("csvName"),
-                hasCsv = values["hasCsv"].toBoolean(),
-            )
-        }
+
+    println("[FileApi/WASM] parseFilesJson: parsed items length=${items.size}")
+    return items.map { item ->
+        val values = item
+            .split(Regex(",\\s*\""))
+            .associate { field ->
+                val normalized = field.trim().removePrefix("\"")
+                val parts = normalized.split(":", limit = 2)
+                parts.first().trim().trim('"') to parts.last().trim().trim('"')
+            }
+        PricesFile(
+            name = values.getValue("name"),
+            csvName = values.getValue("csvName"),
+            hasCsv = values["hasCsv"].toBoolean(),
+        )
+    }
 }
