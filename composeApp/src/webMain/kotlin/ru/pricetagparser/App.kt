@@ -41,24 +41,25 @@ import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
 
-internal data class PriceFile(
+internal data class PricesFile(
     val name: String,
     val csvName: String,
     val hasCsv: Boolean,
     val uploadProgress: Int? = null,
     val uploadFailed: Boolean = false,
+    val uploaded: Boolean = false,
 )
 
 @Composable
 fun App() {
     MaterialTheme {
         val scope = rememberCoroutineScope()
-        var files by remember { mutableStateOf(emptyList<PriceFile>()) }
+        var files by remember { mutableStateOf(emptyList<PricesFile>()) }
         var isLoading by remember { mutableStateOf(true) }
         var isUploading by remember { mutableStateOf(false) }
         var errorMessage by remember { mutableStateOf<String?>(null) }
 
-        fun replaceFile(file: PriceFile) {
+        fun replaceFile(file: PricesFile) {
             files = listOf(file) + files.filterNot { it.name == file.name }
         }
 
@@ -66,7 +67,17 @@ fun App() {
             isLoading = true
             errorMessage = null
             try {
-                files = fetchFiles()
+                val uploadedNames = files
+                    .filter { it.uploaded }
+                    .map { it.name }
+                    .toSet()
+                files = fetchFiles().map { file ->
+                    if (file.name in uploadedNames && !file.hasCsv) {
+                        file.copy(uploaded = true)
+                    } else {
+                        file
+                    }
+                }
             } catch (_: Throwable) {
                 errorMessage = "Не удалось загрузить список файлов"
             } finally {
@@ -99,99 +110,137 @@ fun App() {
                         fontWeight = FontWeight.Bold,
                     )
                     Spacer(modifier = Modifier.height(24.dp))
-                    Card(
-                        modifier = Modifier.fillMaxWidth(),
-                        shape = RoundedCornerShape(24.dp),
-                        colors = CardDefaults.cardColors(containerColor = Color.White),
-                    ) {
-                        when {
-                            isLoading && files.isEmpty() -> LoadingState()
-                            errorMessage != null && files.isEmpty() -> ErrorState(
-                                message = errorMessage.orEmpty(),
-                                onRetry = {
-                                    scope.launchSafely {
-                                        loadFiles()
-                                    }
-                                },
-                            )
-
-                            files.isEmpty() -> EmptyState()
-                            else -> FileList(files = files)
-                        }
-                    }
+                    FilesCard(
+                        files = files,
+                        isLoading = isLoading,
+                        errorMessage = errorMessage,
+                        onRetry = {
+                            scope.launchSafely {
+                                loadFiles()
+                            }
+                        },
+                    )
                 }
 
-                FilledIconButton(
-                    modifier = Modifier
-                        .align(Alignment.BottomCenter)
-                        .size(64.dp),
-                    enabled = !isUploading,
+                UploadButton(
+                    modifier = Modifier.align(Alignment.BottomCenter),
+                    isUploading = isUploading,
                     onClick = {
-                        pickAndUploadFile(
+                        startUpload(
                             scope = scope,
                             onUploadingChanged = { isUploading = it },
-                            onUploadStarted = { fileName ->
-                                replaceFile(
-                                    PriceFile(
-                                        name = fileName,
-                                        csvName = fileName.substringBeforeLast('.') + ".csv",
-                                        hasCsv = false,
-                                        uploadProgress = 0,
-                                    ),
-                                )
-                            },
-                            onUploadProgress = { fileName, progress ->
-                                replaceFile(
-                                    PriceFile(
-                                        name = fileName,
-                                        csvName = fileName.substringBeforeLast('.') + ".csv",
-                                        hasCsv = false,
-                                        uploadProgress = progress,
-                                    ),
-                                )
-                            },
+                            onFileChanged = ::replaceFile,
                             onUploaded = {
                                 scope.launchSafely {
                                     loadFiles()
                                 }
                             },
-                            onError = { fileName ->
-                                errorMessage = "Не удалось загрузить файл"
-                                if (fileName.isNotBlank()) {
-                                    replaceFile(
-                                        PriceFile(
-                                            name = fileName,
-                                            csvName = fileName.substringBeforeLast('.') + ".csv",
-                                            hasCsv = false,
-                                            uploadFailed = true,
-                                        ),
-                                    )
-                                }
-                            },
+                            onError = { errorMessage = "Не удалось загрузить файл" },
                         )
                     },
-                ) {
-                    if (isUploading) {
-                        CircularProgressIndicator(
-                            modifier = Modifier.size(24.dp),
-                            strokeWidth = 2.dp,
-                            color = MaterialTheme.colorScheme.onPrimary,
-                        )
-                    } else {
-                        Text(
-                            text = "+",
-                            style = MaterialTheme.typography.headlineMedium,
-                            fontWeight = FontWeight.Bold,
-                        )
-                    }
-                }
+                )
             }
         }
     }
 }
 
 @Composable
-private fun FileList(files: List<PriceFile>) {
+private fun FilesCard(
+    files: List<PricesFile>,
+    isLoading: Boolean,
+    errorMessage: String?,
+    onRetry: () -> Unit,
+) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(24.dp),
+        colors = CardDefaults.cardColors(containerColor = Color.White),
+    ) {
+        when {
+            isLoading && files.isEmpty() -> LoadingState()
+            errorMessage != null && files.isEmpty() -> ErrorState(
+                message = errorMessage,
+                onRetry = onRetry,
+            )
+
+            files.isEmpty() -> EmptyState()
+            else -> FileList(files = files)
+        }
+    }
+}
+
+private fun startUpload(
+    scope: CoroutineScope,
+    onUploadingChanged: (Boolean) -> Unit,
+    onFileChanged: (PricesFile) -> Unit,
+    onUploaded: () -> Unit,
+    onError: () -> Unit,
+) {
+    fun uploadFileState(
+        fileName: String,
+        uploadProgress: Int? = null,
+        uploadFailed: Boolean = false,
+        uploaded: Boolean = false,
+    ) = PricesFile(
+        name = fileName,
+        csvName = fileName.substringBeforeLast('.') + ".csv",
+        hasCsv = false,
+        uploadProgress = uploadProgress,
+        uploadFailed = uploadFailed,
+        uploaded = uploaded,
+    )
+
+    pickAndUploadFile(
+        scope = scope,
+        onUploadingChanged = onUploadingChanged,
+        onUploadStarted = { fileName ->
+            onFileChanged(uploadFileState(fileName, uploadProgress = 0))
+        },
+        onUploadProgress = { fileName, progress ->
+            onFileChanged(uploadFileState(fileName, uploadProgress = progress))
+        },
+        onUploaded = { fileName ->
+            onFileChanged(uploadFileState(fileName, uploaded = true))
+            onUploaded()
+        },
+        onError = { fileName ->
+            onError()
+            if (fileName.isNotBlank()) {
+                onFileChanged(uploadFileState(fileName, uploadFailed = true))
+            }
+        },
+    )
+}
+
+@Composable
+private fun UploadButton(
+    modifier: Modifier = Modifier,
+    isUploading: Boolean,
+    onClick: () -> Unit,
+) {
+    FilledIconButton(
+        modifier = modifier.size(64.dp),
+        enabled = !isUploading,
+        onClick = onClick,
+    ) {
+        if (isUploading) {
+            CircularProgressIndicator(
+                modifier = Modifier.size(24.dp),
+                strokeWidth = 2.dp,
+                color = MaterialTheme.colorScheme.onPrimary,
+            )
+        } else {
+            Text(
+                text = "+",
+                style = MaterialTheme.typography.headlineMedium,
+                fontWeight = FontWeight.Bold,
+            )
+        }
+    }
+}
+
+@Composable
+private fun FileList(files: List<PricesFile>) {
     LazyColumn(
         modifier = Modifier.fillMaxWidth(),
         verticalArrangement = Arrangement.spacedBy(12.dp),
@@ -220,12 +269,12 @@ private fun FileListPreview() {
             ) {
                 FileList(
                     files = listOf(
-                        PriceFile(
+                        PricesFile(
                             name = "price-tag-photo.jpg",
                             csvName = "price-tag-photo.csv",
                             hasCsv = true,
                         ),
-                        PriceFile(
+                        PricesFile(
                             name = "shelf-video.mp4",
                             csvName = "shelf-video.csv",
                             hasCsv = false,
@@ -238,7 +287,7 @@ private fun FileListPreview() {
 }
 
 @Composable
-private fun FileRow(index: Int, file: PriceFile) {
+private fun FileRow(index: Int, file: PricesFile) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -273,6 +322,11 @@ private fun FileRow(index: Int, file: PriceFile) {
             file.hasCsv -> Button(onClick = { downloadCsv(file.name) }) {
                 Text("Скачать")
             }
+
+            file.uploaded -> Text(
+                text = "Загружен",
+                color = MaterialTheme.colorScheme.primary,
+            )
 
             else -> Row(verticalAlignment = Alignment.CenterVertically) {
                 CircularProgressIndicator(
@@ -355,7 +409,7 @@ private fun CompletedFileRowPreview() {
         Surface(color = Color.White) {
             FileRow(
                 index = 1,
-                file = PriceFile(
+                file = PricesFile(
                     name = "price-tag-photo.jpg",
                     csvName = "price-tag-photo.csv",
                     hasCsv = true,
@@ -373,7 +427,7 @@ private fun ProcessingFileRowPreview() {
         Surface(color = Color.White) {
             FileRow(
                 index = 2,
-                file = PriceFile(
+                file = PricesFile(
                     name = "shelf-video.mp4",
                     csvName = "shelf-video.csv",
                     hasCsv = false,
@@ -434,7 +488,7 @@ private fun CoroutineScope.launchSafely(
     }
 }
 
-internal expect suspend fun fetchFiles(): List<PriceFile>
+internal expect suspend fun fetchFiles(): List<PricesFile>
 
 internal expect fun downloadCsv(fileName: String)
 
@@ -443,6 +497,6 @@ internal expect fun pickAndUploadFile(
     onUploadingChanged: (Boolean) -> Unit,
     onUploadStarted: (String) -> Unit,
     onUploadProgress: (String, Int) -> Unit,
-    onUploaded: () -> Unit,
+    onUploaded: (String) -> Unit,
     onError: (String) -> Unit,
 )

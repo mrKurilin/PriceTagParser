@@ -16,7 +16,7 @@ import kotlin.js.ExperimentalWasmJsInterop
 import kotlin.js.Promise
 
 @OptIn(ExperimentalWasmJsInterop::class)
-internal actual suspend fun fetchFiles(): List<PriceFile> {
+internal actual suspend fun fetchFiles(): List<PricesFile> {
     val url = apiUrl("/api/files")
     println("[FileApi] fetchFiles: origin=${window.location.origin}, url=$url")
     val response = window.fetch(url).await<Response>()
@@ -37,7 +37,7 @@ internal actual fun pickAndUploadFile(
     onUploadingChanged: (Boolean) -> Unit,
     onUploadStarted: (String) -> Unit,
     onUploadProgress: (String, Int) -> Unit,
-    onUploaded: () -> Unit,
+    onUploaded: (String) -> Unit,
     onError: (String) -> Unit,
 ) {
     println("[FileApi] pickAndUploadFile: create file input")
@@ -62,7 +62,7 @@ internal actual fun pickAndUploadFile(
                         onProgress = { progress -> onUploadProgress(file.name, progress) },
                     )
                     println("[FileApi] upload: completed for ${file.name}")
-                    onUploaded()
+                    onUploaded(file.name)
                 } catch (throwable: Throwable) {
                     println("[FileApi] upload: failed for ${file.name}: ${throwable.message}")
                     onError(file.name)
@@ -127,7 +127,7 @@ private fun apiUrl(path: String): String =
         "http://localhost:$SERVER_PORT$path"
     }
 
-private fun String.parseFilesJson(): List<PriceFile> {
+private fun String.parseFilesJson(): List<PricesFile> {
     val trimmed = trim()
     if (trimmed.length <= 2) return emptyList()
     return trimmed
@@ -142,7 +142,7 @@ private fun String.parseFilesJson(): List<PriceFile> {
                     val parts = field.split(":", limit = 2)
                     parts.first().trim('"') to parts.last().trim('"')
                 }
-            PriceFile(
+            PricesFile(
                 name = values.getValue("name"),
                 csvName = values.getValue("csvName"),
                 hasCsv = values["hasCsv"].toBoolean(),

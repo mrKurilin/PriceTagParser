@@ -13,12 +13,12 @@ import org.w3c.xhr.XMLHttpRequest
 import kotlin.coroutines.resume
 import kotlin.js.Json
 
-internal actual suspend fun fetchFiles(): List<PriceFile> {
+internal actual suspend fun fetchFiles(): List<PricesFile> {
     val response = window.fetch("/api/files").await()
     if (!response.ok) error("Files request failed")
     val payload = response.json().await().unsafeCast<Array<Json>>()
     return payload.map { item ->
-        PriceFile(
+        PricesFile(
             name = item["name"] as String,
             csvName = item["csvName"] as String,
             hasCsv = item["hasCsv"] as Boolean,
@@ -35,7 +35,7 @@ internal actual fun pickAndUploadFile(
     onUploadingChanged: (Boolean) -> Unit,
     onUploadStarted: (String) -> Unit,
     onUploadProgress: (String, Int) -> Unit,
-    onUploaded: () -> Unit,
+    onUploaded: (String) -> Unit,
     onError: (String) -> Unit,
 ) {
     val input = (document.createElement("input") as HTMLInputElement).apply {
@@ -54,7 +54,7 @@ internal actual fun pickAndUploadFile(
                     file = file,
                     onProgress = { progress -> onUploadProgress(file.name, progress) },
                 )
-                onUploaded()
+                onUploaded(file.name)
             }
         }
         null
@@ -66,7 +66,7 @@ private suspend fun uploadFile(
     file: org.w3c.files.File,
     onProgress: (Int) -> Unit,
 ) {
-    suspendCancellableCoroutine<Unit> { continuation ->
+    suspendCancellableCoroutine { continuation ->
         val request = XMLHttpRequest()
         request.open("POST", "/api/upload")
         request.upload.onprogress = { event ->
