@@ -5,10 +5,13 @@ import kotlinx.browser.window
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.await
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.suspendCancellableCoroutine
 import org.w3c.dom.HTMLInputElement
 import org.w3c.dom.asList
 import org.w3c.fetch.Response
 import org.w3c.xhr.FormData
+import org.w3c.xhr.XMLHttpRequest
+import kotlin.coroutines.resume
 import kotlin.js.ExperimentalWasmJsInterop
 import kotlin.js.Promise
 
@@ -51,17 +54,13 @@ internal actual fun pickAndUploadFile(
                 onUploadingChanged(true)
                 onUploadStarted(file.name)
                 try {
-                    val formData = FormData()
-                    formData.append("file", file)
                     val url = apiUrl("/api/upload")
-                    println("[FileApi] upload: fetch start url=$url, origin=${window.location.origin}")
-                    val response = uploadFetch(
+                    println("[FileApi] upload: xhr start url=$url, origin=${window.location.origin}")
+                    uploadFile(
                         url = url,
-                        body = formData,
-                    ).await<Response>()
-                    println("[FileApi] upload: fetch response ok=${response.ok}, status=${response.status}, statusText=${response.statusText}")
-                    if (!response.ok) error("Upload failed with status ${response.status}")
-                    onUploadProgress(file.name, 100)
+                        file = file,
+                        onProgress = { progress -> onUploadProgress(file.name, progress) },
+                    )
                     println("[FileApi] upload: completed for ${file.name}")
                     onUploaded()
                 } catch (throwable: Throwable) {
@@ -81,8 +80,45 @@ internal actual fun pickAndUploadFile(
 }
 
 @OptIn(ExperimentalWasmJsInterop::class)
-@JsFun("(url, body) => fetch(url, { method: 'POST', body: body })")
-private external fun uploadFetch(url: String, body: FormData): Promise<JsAny?>
+private suspend fun uploadFile(
+    url: String,
+    file: org.w3c.files.File,
+    onProgress: (Int) -> Unit,
+) {
+    suspendCancellableCoroutine { continuation ->
+        val request = XMLHttpRequest()
+        request.open("POST", url)
+        request.upload.onprogress = { event ->
+            if (event.lengthComputable) {
+                val loaded = event.loaded.toDouble()
+                val total = event.total.toDouble()
+                onProgress(((loaded / total) * 100).toInt().coerceIn(0, 99))
+            }
+        }
+        request.onload = {
+            println("[FileApi] upload: xhr response status=${request.status}, statusText=${request.statusText}")
+            if (request.status in 200..299) {
+                onProgress(100)
+                continuation.resume(Unit)
+            } else {
+                continuation.cancel(Throwable("Upload failed with status ${request.status}"))
+            }
+        }
+        request.onerror = {
+            continuation.cancel(Throwable("Upload failed"))
+        }
+        request.onabort = {
+            continuation.cancel(Throwable("Upload aborted"))
+        }
+        continuation.invokeOnCancellation {
+            request.abort()
+        }
+
+        val formData = FormData()
+        formData.append("file", file)
+        request.send(formData)
+    }
+}
 
 private fun apiUrl(path: String): String =
     if (window.location.port == SERVER_PORT.toString()) {

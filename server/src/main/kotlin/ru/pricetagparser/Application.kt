@@ -16,12 +16,14 @@ import io.ktor.server.request.receiveMultipart
 import io.ktor.server.response.header
 import io.ktor.server.response.respond
 import io.ktor.server.response.respondText
-import io.ktor.utils.io.jvm.javaio.toInputStream
 import io.ktor.server.routing.get
 import io.ktor.server.routing.post
 import io.ktor.server.routing.routing
+import io.ktor.utils.io.ByteReadChannel
+import io.ktor.utils.io.readAvailable
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import java.io.File
-import java.io.InputStream
 import java.io.OutputStream
 
 private const val MAX_UPLOAD_SIZE_BYTES = 500L * 1024L * 1024L
@@ -101,10 +103,8 @@ fun Application.module() {
                         if (fileName.isNotBlank()) {
                             val targetFile = filesDirectory.resolve(fileName)
                             try {
-                                part.provider().toInputStream().use { input ->
-                                    targetFile.outputStream().use { output ->
-                                        input.copyToWithLimit(output, MAX_UPLOAD_SIZE_BYTES)
-                                    }
+                                targetFile.outputStream().use { output ->
+                                    part.provider().copyToWithLimit(output, MAX_UPLOAD_SIZE_BYTES)
                                 }
                                 uploadedFileName = fileName
                                 println("[Server] POST /api/upload: saved file=${targetFile.absolutePath}, size=${targetFile.length()}")
@@ -160,18 +160,20 @@ fun Application.module() {
 
 private class UploadTooLargeException : RuntimeException()
 
-private fun InputStream.copyToWithLimit(
+private suspend fun ByteReadChannel.copyToWithLimit(
     output: OutputStream,
     limit: Long,
 ) {
-    val buffer = ByteArray(DEFAULT_BUFFER_SIZE)
-    var copied = 0L
-    while (true) {
-        val bytes = read(buffer)
-        if (bytes < 0) break
-        copied += bytes
-        if (copied > limit) throw UploadTooLargeException()
-        output.write(buffer, 0, bytes)
+    withContext(Dispatchers.IO) {
+        val buffer = ByteArray(DEFAULT_BUFFER_SIZE)
+        var copied = 0L
+        while (true) {
+            val bytes = readAvailable(buffer)
+            if (bytes < 0) break
+            copied += bytes
+            if (copied > limit) throw UploadTooLargeException()
+            output.write(buffer, 0, bytes)
+        }
     }
 }
 
