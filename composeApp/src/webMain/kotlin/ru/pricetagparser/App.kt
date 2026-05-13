@@ -47,7 +47,6 @@ internal data class PricesFile(
     val hasCsv: Boolean,
     val uploadProgress: Int? = null,
     val uploadFailed: Boolean = false,
-    val uploaded: Boolean = false,
 )
 
 @Composable
@@ -67,17 +66,7 @@ fun App() {
             isLoading = true
             errorMessage = null
             try {
-                val uploadedNames = files
-                    .filter { it.uploaded }
-                    .map { it.name }
-                    .toSet()
-                files = fetchFiles().map { file ->
-                    if (file.name in uploadedNames && !file.hasCsv) {
-                        file.copy(uploaded = true)
-                    } else {
-                        file
-                    }
-                }
+                files = fetchFiles()
             } catch (_: Throwable) {
                 errorMessage = "Не удалось загрузить список файлов"
             } finally {
