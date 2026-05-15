@@ -1,83 +1,130 @@
-This is a Kotlin Multiplatform project targeting Web, Server.
+## 0. Общее описание
 
-* [/composeApp](./composeApp/src) is for code that will be shared across your Compose Multiplatform applications.
-  It contains several subfolders:
-  - [commonMain](./composeApp/src/commonMain/kotlin) is for code that’s common for all targets.
-  - Other folders are for Kotlin code that will be compiled for only the platform indicated in the folder name.
-    For example, if you want to use Apple’s CoreCrypto for the iOS part of your Kotlin app,
-    the [iosMain](./composeApp/src/iosMain/kotlin) folder would be the right place for such calls.
-    Similarly, if you want to edit the Desktop (JVM) specific part, the [jvmMain](./composeApp/src/jvmMain/kotlin)
-    folder is the appropriate location.
+`PriceTagParser` — решение для обработки фото и видео ценников из задачи Lenta Tech Life Hack.
 
-* [/server](./server/src/main/kotlin) is for the Ktor server application.
+Приложение позволяет:
 
-* [/shared](./shared/src) is for the code that will be shared between all targets in the project.
-  The most important subfolder is [commonMain](./shared/src/commonMain/kotlin). If preferred, you
-  can add code to the platform-specific folders here too.
+- **загружать файлы** с фото или видео ценников;
+- **отслеживать статус обработки**: загрузка, обработка, готовый CSV;
+- **получать CSV-файл** с результатом обработки;
+- **работать в двух режимах**:
+  - desktop-приложение на Compose Desktop;
+  - web-приложение с Ktor-сервером и Compose Multiplatform UI.
 
-### Build and Run Server
+### Архитектура проекта
 
-To build and run the development version of the server, use the run configuration from the run widget
-in your IDE’s toolbar or run it directly from the terminal:
-- on macOS/Linux
-  ```shell
-  ./gradlew :server:run
-  ```
-- on Windows
-  ```shell
-  .\gradlew.bat :server:run
-  ```
+- **`composeApp`** — общий Compose UI для web и desktop.
+- **`server`** — Ktor-сервер: принимает загрузки, хранит файлы, отдаёт список файлов и CSV.
+- **`shared`** — общая JVM-логика обработки файла для server и desktop.
+- **`files` / `server/files`** — папки с исходными файлами и сгенерированными CSV.
+- **`generate_csv.sh`** — скрипт обработки: создаёт CSV рядом с выбранным файлом с тем же базовым именем.
 
-### Build and Run Web Application and Server with Docker Compose
+### Логика обработки
 
-Run the web application and server from the `server` directory:
+После загрузки или выбора файла приложение запускает общий обработчик `PriceFileProcessor`.
+Он вызывает `generate_csv.sh`, который создаёт файл вида:
+
+- исходный файл: `example.mp4`
+- результат: `example.csv`
+
+После выбора файла в web-приложении UI показывает статус **«Загрузка N%»** с прогрессом отправки файла на сервер. Прогресс считается на стороне браузера через `XMLHttpRequest.upload.onprogress` и отображается в общем Compose UI как **«Загрузка 0%» ... «Загрузка 100%»**.
+
+После завершения загрузки запускается обработка файла. Пока CSV не появился, UI показывает статус **«Обработка»**. Список файлов автоматически обновляется каждые **10 секунд**, а верхний progress bar показывает время до следующего обновления.
+
+## 1. Инструкция по запуску локально desktop-версии
+
+### Требования
+
+- **JDK 21**
+- **macOS, Windows или Linux**
+- доступ к shell-скрипту `generate_csv.sh`
+
+### Команды desktop-версии
+
+Все команды выполняются из корня проекта:
+
+```shell
+# Запустить desktop-приложение на macOS/Linux
+./gradlew :composeApp:run
+
+# Запустить desktop-приложение на Windows
+.\gradlew.bat :composeApp:run
+
+# Собрать desktop-дистрибутив для текущей ОС
+./gradlew :composeApp:packageDistributionForCurrentOS
+```
+
+### Как пользоваться
+
+1. Запустите desktop-приложение.
+2. Нажмите кнопку **`+`**.
+3. Выберите фото или видео файл.
+4. Файл будет скопирован в папку `files` в корне проекта.
+5. После загрузки файл перейдёт в статус **«Обработка»**.
+6. После появления CSV станут доступны кнопки:
+   - **«Открыть файл»** — открыть сгенерированный CSV;
+   - **«Открыть папку»** — открыть папку с CSV.
+
+Поддерживаемые desktop-форматы в проекте:
+
+- **macOS**: `dmg`
+- **Windows**: `msi`
+- **Linux**: `deb`
+
+## 2. Инструкция по разворачиванию web-приложения на сервере
+
+### Требования
+
+- **Docker**
+- **Docker Compose**
+
+### Запуск через Docker Compose
+
+Все команды выполняются из корня проекта:
+
 ```shell
 cd server
+
+# Собрать и запустить приложение
 docker compose up --build
-```
 
-Run the web application and server in the background:
-```shell
-cd server
+# Или собрать и запустить приложение в фоне
 docker compose up --build -d
-```
 
-Stop the application:
-```shell
-cd server
+# Остановить приложение
 docker compose down
 ```
 
-The web application and API are available at `http://localhost:8080`, and uploaded files are stored in `server/files`.
+После старта приложение будет доступно по адресу:
 
-### Build and Run Web Application
+```text
+http://localhost:8080
+```
 
-To build and run the development version of the web app, use the run configuration from the run widget
-in your IDE's toolbar or run it directly from the terminal:
-- for the Wasm target (faster, modern browsers):
-  - on macOS/Linux
-    ```shell
-    ./gradlew :composeApp:wasmJsBrowserDevelopmentRun
-    ```
-  - on Windows
-    ```shell
-    .\gradlew.bat :composeApp:wasmJsBrowserDevelopmentRun
-    ```
-- for the JS target (slower, supports older browsers):
-  - on macOS/Linux
-    ```shell
-    ./gradlew :composeApp:jsBrowserDevelopmentRun
-    ```
-  - on Windows
-    ```shell
-    .\gradlew.bat :composeApp:jsBrowserDevelopmentRun
-    ```
+### Где хранятся файлы
 
----
+В Docker Compose папка `server/files` на хосте подключается в контейнер как `/app/files`.
 
-Learn more about [Kotlin Multiplatform](https://www.jetbrains.com/help/kotlin-multiplatform-dev/get-started.html),
-[Compose Multiplatform](https://github.com/JetBrains/compose-multiplatform/#compose-multiplatform),
-[Kotlin/Wasm](https://kotl.in/wasm/)…
+Это значит:
 
-We would appreciate your feedback on Compose/Web and Kotlin/Wasm in the public Slack channel [#compose-web](https://slack-chats.kotlinlang.org/c/compose-web).
-If you face any issues, please report them on [YouTrack](https://youtrack.jetbrains.com/newIssue?project=CMP).
+- при выборе файла web UI показывает **«Загрузка N%»** до завершения отправки файла на сервер;
+- загруженные через web файлы сохраняются в `server/files`;
+- CSV создаётся рядом с исходным файлом;
+- состояние **«Обработка»** определяется отсутствием CSV;
+- состояние готовности определяется наличием CSV с тем же базовым именем.
+
+### Полезные переменные окружения
+
+В `server/docker-compose.yml` используются:
+
+- **`SERVER_PORT=8080`** — порт Ktor-сервера;
+- **`WEB_DIR=/app/web`** — путь к собранному web UI внутри контейнера;
+- **`PRICE_TAG_PARSER_SCRIPT=/app/generate_csv.sh`** — путь к скрипту генерации CSV внутри контейнера.
+
+### Проверка production-сборки без Docker
+
+Из корня проекта можно собрать server fat jar и web UI:
+
+```shell
+./gradlew :server:buildFatJar :composeApp:composeCompatibilityBrowserDistribution
+```

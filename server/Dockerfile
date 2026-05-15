@@ -8,4 +8,6 @@ EXPOSE 8080
 WORKDIR /app
 COPY --from=build /workspace/server/build/libs/fat.jar /app/app.jar
 COPY --from=build /workspace/composeApp/build/dist/composeWebCompatibility/productionExecutable /app/web
+COPY --from=build /workspace/generate_csv.sh /app/generate_csv.sh
+RUN chmod +x /app/generate_csv.sh
 ENTRYPOINT ["java","-jar","/app/app.jar"]
