@@ -21,7 +21,10 @@ import io.ktor.server.routing.post
 import io.ktor.server.routing.routing
 import io.ktor.utils.io.ByteReadChannel
 import io.ktor.utils.io.readAvailable
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.File
 import java.io.OutputStream
@@ -31,6 +34,7 @@ private const val MAX_MULTIPART_OVERHEAD_BYTES = 2L * 1024L * 1024L
 
 private val filesDirectory = File("files")
 private val webDirectory = File(System.getenv("WEB_DIR") ?: "web")
+private val processingScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
 fun main() {
     val serverPort = System.getenv("SERVER_PORT")?.toIntOrNull() ?: SERVER_PORT
@@ -107,6 +111,9 @@ fun Application.module() {
                                     part.provider().copyToWithLimit(output, MAX_UPLOAD_SIZE_BYTES)
                                 }
                                 uploadedFileName = fileName
+                                processingScope.launch {
+                                    PriceFileProcessor.process(targetFile)
+                                }
                                 println("[Server] POST /api/upload: saved file=${targetFile.absolutePath}, size=${targetFile.length()}")
                             } catch (_: UploadTooLargeException) {
                                 uploadTooLarge = true

@@ -1,5 +1,8 @@
 package ru.pricetagparser
 
+import androidx.compose.material3.Button
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
 import kotlinx.browser.document
 import kotlinx.browser.window
 import kotlinx.coroutines.CoroutineScope
@@ -33,6 +36,13 @@ internal actual suspend fun fetchFiles(): List<PricesFile> {
             csvName = item["csvName"] as String,
             hasCsv = item["hasCsv"] as Boolean,
         )
+    }
+}
+
+@Composable
+internal actual fun CompletedFileActions(file: PricesFile) {
+    Button(onClick = { downloadCsv(file.name) }) {
+        Text("Скачать")
     }
 }
 

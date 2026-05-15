@@ -8,6 +8,8 @@ plugins {
 }
 
 kotlin {
+    jvm()
+
     js {
         browser()
         binaries.executable()
@@ -34,7 +36,21 @@ kotlin {
         commonTest.dependencies {
             implementation(libs.kotlin.test)
         }
+        jvmMain.dependencies {
+            implementation(compose.desktop.currentOs)
+        }
     }
 }
 
+compose.desktop {
+    application {
+        mainClass = "ru.pricetagparser.MainKt"
+
+        nativeDistributions {
+            targetFormats(TargetFormat.Dmg, TargetFormat.Msi, TargetFormat.Deb)
+            packageName = "PriceTagParser"
+            packageVersion = "1.0.0"
+        }
+    }
+}
 

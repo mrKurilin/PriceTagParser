@@ -1,5 +1,8 @@
 package ru.pricetagparser
 
+import androidx.compose.material3.Button
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
 import kotlinx.browser.document
 import kotlinx.browser.window
 import kotlinx.coroutines.CoroutineScope
@@ -24,6 +27,13 @@ internal actual suspend fun fetchFiles(): List<PricesFile> {
     val text = response.text().unsafeCast<Promise<JsAny?>>().await<JsAny?>().toString()
     println("[FileApi/WASM] fetchFiles: raw text length=${text.length}, first 200=${text.take(200)}")
     return text.parseFilesJson()
+}
+
+@Composable
+internal actual fun CompletedFileActions(file: PricesFile) {
+    Button(onClick = { downloadCsv(file.name) }) {
+        Text("Скачать")
+    }
 }
 
 internal actual fun downloadCsv(fileName: String) {

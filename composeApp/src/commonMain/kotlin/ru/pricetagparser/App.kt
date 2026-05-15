@@ -16,11 +16,11 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.FilledIconButton
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
@@ -39,7 +39,10 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+
+private const val REFRESH_INTERVAL_SECONDS = 10
 
 internal data class PricesFile(
     val name: String,
@@ -57,6 +60,7 @@ fun App() {
         var isLoading by remember { mutableStateOf(true) }
         var isUploading by remember { mutableStateOf(false) }
         var errorMessage by remember { mutableStateOf<String?>(null) }
+        var refreshProgress by remember { mutableStateOf(0f) }
 
         fun replaceFile(file: PricesFile) {
             files = listOf(file) + files.filterNot { it.name == file.name }
@@ -76,6 +80,15 @@ fun App() {
 
         LaunchedEffect(Unit) {
             loadFiles()
+            while (true) {
+                repeat(REFRESH_INTERVAL_SECONDS) { second ->
+                    refreshProgress = second.toFloat() / REFRESH_INTERVAL_SECONDS
+                    delay(1_000)
+                }
+                refreshProgress = 1f
+                loadFiles()
+                refreshProgress = 0f
+            }
         }
 
         Surface(
@@ -98,7 +111,13 @@ fun App() {
                         style = MaterialTheme.typography.headlineLarge,
                         fontWeight = FontWeight.Bold,
                     )
+
+                    Spacer(modifier = Modifier.height(16.dp))
+
+                    RefreshProgressBar(progress = refreshProgress)
+
                     Spacer(modifier = Modifier.height(24.dp))
+
                     FilesCard(
                         files = files,
                         isLoading = isLoading,
@@ -131,6 +150,14 @@ fun App() {
             }
         }
     }
+}
+
+@Composable
+private fun RefreshProgressBar(progress: Float) {
+    LinearProgressIndicator(
+        progress = { progress },
+        modifier = Modifier.fillMaxWidth(),
+    )
 }
 
 @Composable
@@ -309,11 +336,7 @@ private fun FileRow(index: Int, file: PricesFile) {
                 Text("Загрузка ${file.uploadProgress}%")
             }
 
-            file.hasCsv -> {
-                Button(onClick = { downloadCsv(file.name) }) {
-                    Text("Скачать")
-                }
-            }
+            file.hasCsv -> CompletedFileActions(file)
 
             else -> {
                 Row(verticalAlignment = Alignment.CenterVertically) {
@@ -480,6 +503,9 @@ private fun CoroutineScope.launchSafely(
 }
 
 internal expect suspend fun fetchFiles(): List<PricesFile>
+
+@Composable
+internal expect fun CompletedFileActions(file: PricesFile)
 
 internal expect fun downloadCsv(fileName: String)
 
