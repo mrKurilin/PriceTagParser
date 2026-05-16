@@ -28,13 +28,19 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.File
 import java.io.OutputStream
+import java.net.URI
+import java.net.http.HttpClient
+import java.net.http.HttpRequest
+import java.net.http.HttpResponse
 
 private const val MAX_UPLOAD_SIZE_BYTES = 500L * 1024L * 1024L
 private const val MAX_MULTIPART_OVERHEAD_BYTES = 2L * 1024L * 1024L
+private const val YANDEX_COMPUTE_API_BASE_URL = "https://compute.api.cloud.yandex.net/compute/v1"
 
 private val filesDirectory = File("files")
 private val webDirectory = File(System.getenv("WEB_DIR") ?: "web")
 private val processingScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+private val backendManager = YandexBackendManager()
 
 fun main() {
     val serverPort = System.getenv("SERVER_PORT")?.toIntOrNull() ?: SERVER_PORT
@@ -66,6 +72,48 @@ fun Application.module() {
                 text = filesJson,
                 contentType = ContentType.Application.Json,
             )
+        }
+
+        get("/api/backend/status") {
+            try {
+                val statusJson = backendManager.statusJson()
+                println("[Server] GET /api/backend/status: respond $statusJson")
+                call.respondText(
+                    text = statusJson,
+                    contentType = ContentType.Application.Json,
+                )
+            } catch (throwable: Throwable) {
+                println("[Server] GET /api/backend/status: failed ${throwable.message}")
+                call.respond(HttpStatusCode.BadGateway)
+            }
+        }
+
+        post("/api/backend/start") {
+            try {
+                val statusJson = backendManager.startJson()
+                println("[Server] POST /api/backend/start: respond $statusJson")
+                call.respondText(
+                    text = statusJson,
+                    contentType = ContentType.Application.Json,
+                )
+            } catch (throwable: Throwable) {
+                println("[Server] POST /api/backend/start: failed ${throwable.message}")
+                call.respond(HttpStatusCode.BadGateway)
+            }
+        }
+
+        post("/api/backend/stop") {
+            try {
+                val statusJson = backendManager.stopJson()
+                println("[Server] POST /api/backend/stop: respond $statusJson")
+                call.respondText(
+                    text = statusJson,
+                    contentType = ContentType.Application.Json,
+                )
+            } catch (throwable: Throwable) {
+                println("[Server] POST /api/backend/stop: failed ${throwable.message}")
+                call.respond(HttpStatusCode.BadGateway)
+            }
         }
 
         get("/api/files/{name}/download") {
@@ -165,7 +213,81 @@ fun Application.module() {
     }
 }
 
+private class YandexBackendManager(
+    private val httpClient: HttpClient = HttpClient.newHttpClient(),
+    private val iamToken: String = System.getenv("YANDEX_IAM_TOKEN").orEmpty(),
+    private val folderId: String = System.getenv("YANDEX_FOLDER_ID").orEmpty(),
+    private val instanceId: String = System.getenv("YANDEX_INSTANCE_ID").orEmpty(),
+) {
+    fun statusJson(): String {
+        ensureConfigured()
+        val request = authorizedRequest(
+            uri = "$YANDEX_COMPUTE_API_BASE_URL/instances?folderId=$folderId",
+        ).GET().build()
+        val response = httpClient.send(request, HttpResponse.BodyHandlers.ofString())
+        ensureSuccess(response)
+        return "{\"powerStatus\":\"${response.body().instancePowerStatus(instanceId)}\"}"
+    }
+
+    fun startJson(): String {
+        ensureConfigured()
+        performAction("start")
+        return "{\"powerStatus\":\"Starting\"}"
+    }
+
+    fun stopJson(): String {
+        ensureConfigured()
+        performAction("stop")
+        return "{\"powerStatus\":\"Stopping\"}"
+    }
+
+    private fun performAction(action: String) {
+        val request = authorizedRequest(
+            uri = "$YANDEX_COMPUTE_API_BASE_URL/instances/$instanceId:$action",
+        ).POST(HttpRequest.BodyPublishers.noBody()).build()
+        val response = httpClient.send(request, HttpResponse.BodyHandlers.ofString())
+        ensureSuccess(response)
+    }
+
+    private fun authorizedRequest(uri: String): HttpRequest.Builder = HttpRequest.newBuilder()
+        .uri(URI.create(uri))
+        .header(HttpHeaders.Authorization, "Bearer $iamToken")
+        .header(HttpHeaders.Accept, ContentType.Application.Json.toString())
+
+    private fun ensureConfigured() {
+        check(iamToken.isNotBlank()) { "YANDEX_IAM_TOKEN is not configured" }
+        check(folderId.isNotBlank()) { "YANDEX_FOLDER_ID is not configured" }
+        check(instanceId.isNotBlank()) { "YANDEX_INSTANCE_ID is not configured" }
+    }
+
+    private fun ensureSuccess(response: HttpResponse<String>) {
+        check(response.statusCode() in 200..299) {
+            "Yandex Compute API failed with status ${response.statusCode()}"
+        }
+    }
+}
+
 private class UploadTooLargeException : RuntimeException()
+
+private fun String.instancePowerStatus(instanceId: String): String {
+    val idIndex = indexOf("\"id\":\"$instanceId\"")
+        .takeIf { it >= 0 }
+        ?: indexOf("\"id\" : \"$instanceId\"")
+            .takeIf { it >= 0 }
+        ?: return "Unknown"
+    val yandexStatus = Regex("\"status\"\\s*:\\s*\"([^\"]+)\"")
+        .find(substring(idIndex))
+        ?.groupValues
+        ?.getOrNull(1)
+        .orEmpty()
+    return when (yandexStatus) {
+        "RUNNING" -> "Running"
+        "STOPPED" -> "Stopped"
+        "STARTING", "PROVISIONING" -> "Starting"
+        "STOPPING" -> "Stopping"
+        else -> "Unknown"
+    }
+}
 
 private suspend fun ByteReadChannel.copyToWithLimit(
     output: OutputStream,

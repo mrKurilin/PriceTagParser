@@ -39,6 +39,12 @@ internal actual suspend fun fetchFiles(): List<PricesFile> {
     }
 }
 
+internal actual suspend fun fetchBackendStatus(): BackendStatus = fetchBackend("/api/backend/status")
+
+internal actual suspend fun startBackend(): BackendStatus = fetchBackend("/api/backend/start", method = "POST")
+
+internal actual suspend fun stopBackend(): BackendStatus = fetchBackend("/api/backend/stop", method = "POST")
+
 @Composable
 internal actual fun CompletedFileActions(file: PricesFile) {
     Button(onClick = { downloadCsv(file.name) }) {
@@ -80,6 +86,28 @@ internal actual fun pickAndUploadFile(
         null
     }
     input.click()
+}
+
+private suspend fun fetchBackend(path: String, method: String = "GET"): BackendStatus = suspendCancellableCoroutine { continuation ->
+    val request = XMLHttpRequest()
+    request.open(method, path)
+    request.onload = {
+        if (request.status in 200..299) {
+            continuation.resume(request.responseText.parseBackendStatus())
+        } else {
+            continuation.cancel(Throwable("Backend request failed with status ${request.status}"))
+        }
+    }
+    request.onerror = {
+        continuation.cancel(Throwable("Backend request failed"))
+    }
+    request.onabort = {
+        continuation.cancel(Throwable("Backend request aborted"))
+    }
+    continuation.invokeOnCancellation {
+        request.abort()
+    }
+    request.send()
 }
 
 private suspend fun uploadFile(

@@ -24,6 +24,7 @@ import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -52,6 +53,18 @@ internal data class PricesFile(
     val uploadFailed: Boolean = false,
 )
 
+internal enum class BackendPowerStatus {
+    Running,
+    Stopped,
+    Starting,
+    Stopping,
+    Unknown,
+}
+
+internal data class BackendStatus(
+    val powerStatus: BackendPowerStatus,
+)
+
 @Composable
 fun App() {
     MaterialTheme {
@@ -60,6 +73,9 @@ fun App() {
         var isLoading by remember { mutableStateOf(true) }
         var isUploading by remember { mutableStateOf(false) }
         var errorMessage by remember { mutableStateOf<String?>(null) }
+        var backendStatus by remember { mutableStateOf(BackendStatus(BackendPowerStatus.Unknown)) }
+        var isBackendActionRunning by remember { mutableStateOf(false) }
+        var backendErrorMessage by remember { mutableStateOf<String?>(null) }
         var refreshProgress by remember { mutableStateOf(0f) }
 
         fun replaceFile(file: PricesFile) {
@@ -78,7 +94,39 @@ fun App() {
             }
         }
 
+        suspend fun loadBackendStatus() {
+            backendErrorMessage = null
+            try {
+                backendStatus = fetchBackendStatus()
+            } catch (_: Throwable) {
+                backendStatus = BackendStatus(BackendPowerStatus.Unknown)
+                backendErrorMessage = "Не удалось получить статус бэка"
+            }
+        }
+
+        fun setBackendEnabled(enabled: Boolean) {
+            scope.launchSafely(
+                onError = {
+                    backendErrorMessage = if (enabled) {
+                        "Не удалось включить бэк"
+                    } else {
+                        "Не удалось выключить бэк"
+                    }
+                    isBackendActionRunning = false
+                },
+            ) {
+                isBackendActionRunning = true
+                backendErrorMessage = null
+                backendStatus = BackendStatus(
+                    if (enabled) BackendPowerStatus.Starting else BackendPowerStatus.Stopping,
+                )
+                backendStatus = if (enabled) startBackend() else stopBackend()
+                isBackendActionRunning = false
+            }
+        }
+
         LaunchedEffect(Unit) {
+            loadBackendStatus()
             loadFiles()
             while (true) {
                 repeat(REFRESH_INTERVAL_SECONDS) { second ->
@@ -86,6 +134,7 @@ fun App() {
                     delay(1_000)
                 }
                 refreshProgress = 1f
+                loadBackendStatus()
                 loadFiles()
                 refreshProgress = 0f
             }
@@ -115,6 +164,15 @@ fun App() {
                     Spacer(modifier = Modifier.height(16.dp))
 
                     RefreshProgressBar(progress = refreshProgress)
+
+                    Spacer(modifier = Modifier.height(16.dp))
+
+                    BackendToggleCard(
+                        status = backendStatus,
+                        isActionRunning = isBackendActionRunning,
+                        errorMessage = backendErrorMessage,
+                        onEnabledChanged = ::setBackendEnabled,
+                    )
 
                     Spacer(modifier = Modifier.height(24.dp))
 
@@ -158,6 +216,70 @@ private fun RefreshProgressBar(progress: Float) {
         progress = { progress },
         modifier = Modifier.fillMaxWidth(),
     )
+}
+
+@Composable
+private fun BackendToggleCard(
+    status: BackendStatus,
+    isActionRunning: Boolean,
+    errorMessage: String?,
+    onEnabledChanged: (Boolean) -> Unit,
+) {
+    val isRunning = status.powerStatus == BackendPowerStatus.Running
+    val isChanging = isActionRunning ||
+        status.powerStatus == BackendPowerStatus.Starting ||
+        status.powerStatus == BackendPowerStatus.Stopping
+    val statusText = when (status.powerStatus) {
+        BackendPowerStatus.Running -> "Бэк включен"
+        BackendPowerStatus.Stopped -> "Бэк выключен"
+        BackendPowerStatus.Starting -> "Бэк запускается"
+        BackendPowerStatus.Stopping -> "Бэк останавливается"
+        BackendPowerStatus.Unknown -> "Статус бэка неизвестен"
+    }
+
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(20.dp),
+        colors = CardDefaults.cardColors(containerColor = Color.White),
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(20.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween,
+        ) {
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = "Бэк обработки",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold,
+                )
+
+                Spacer(modifier = Modifier.height(4.dp))
+
+                Text(
+                    text = errorMessage ?: statusText,
+                    color = if (errorMessage == null) Color(0xFF5F6368) else MaterialTheme.colorScheme.error,
+                )
+            }
+
+            Spacer(modifier = Modifier.width(16.dp))
+
+            if (isChanging) {
+                CircularProgressIndicator(
+                    modifier = Modifier.size(28.dp),
+                    strokeWidth = 2.dp,
+                )
+            } else {
+                Switch(
+                    checked = isRunning,
+                    onCheckedChange = onEnabledChanged,
+                    enabled = status.powerStatus != BackendPowerStatus.Unknown,
+                )
+            }
+        }
+    }
 }
 
 @Composable
@@ -502,7 +624,29 @@ private fun CoroutineScope.launchSafely(
     }
 }
 
+internal fun String.parseBackendStatus(): BackendStatus {
+    val status = Regex("\"powerStatus\"\\s*:\\s*\"([^\"]+)\"")
+        .find(this)
+        ?.groupValues
+        ?.getOrNull(1)
+    return BackendStatus(
+        powerStatus = when (status) {
+            "Running" -> BackendPowerStatus.Running
+            "Stopped" -> BackendPowerStatus.Stopped
+            "Starting" -> BackendPowerStatus.Starting
+            "Stopping" -> BackendPowerStatus.Stopping
+            else -> BackendPowerStatus.Unknown
+        },
+    )
+}
+
 internal expect suspend fun fetchFiles(): List<PricesFile>
+
+internal expect suspend fun fetchBackendStatus(): BackendStatus
+
+internal expect suspend fun startBackend(): BackendStatus
+
+internal expect suspend fun stopBackend(): BackendStatus
 
 @Composable
 internal expect fun CompletedFileActions(file: PricesFile)
