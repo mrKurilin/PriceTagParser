@@ -117,10 +117,10 @@ http://<api-server-host>:8080/api/files
 cd server
 
 # Собрать и запустить сайт
-SITE_HOST_PORT=8081 docker compose -f docker-compose.site.yml up --build
+SITE_HOST_PORT=8081 docker-compose -f docker-compose.site.yml up --build
 
 # Или запустить сайт в фоне
-SITE_HOST_PORT=8081 docker compose -f docker-compose.site.yml up --build -d
+SITE_HOST_PORT=8081 docker-compose -f docker-compose.site.yml up --build -d
 
 # Проверить состояние контейнера и логи
 docker compose -f docker-compose.site.yml ps

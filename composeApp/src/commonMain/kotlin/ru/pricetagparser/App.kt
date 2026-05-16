@@ -98,9 +98,9 @@ fun App() {
             backendErrorMessage = null
             try {
                 backendStatus = fetchBackendStatus()
-            } catch (_: Throwable) {
+            } catch (error: Throwable) {
                 backendStatus = BackendStatus(BackendPowerStatus.Unknown)
-                backendErrorMessage = "Не удалось получить статус бэка"
+                backendErrorMessage = "Не удалось получить статус бэка:\n${error.message}"
             }
         }
 
