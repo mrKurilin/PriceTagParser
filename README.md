@@ -86,19 +86,38 @@
 
 ### Запуск REST API сервера обработки с GPU
 
-Команды выполняются на сервере обработки из папки `server`:
+Команды выполняются на сервере обработки из папки `server`.
+
+Перед запуском REST API передайте переменные для управления Yandex Compute в окружение Docker Compose:
 
 ```shell
 cd server
 
+export YANDEX_IAM_TOKEN='<iam-token>'
+export YANDEX_FOLDER_ID='<folder-id>'
+export YANDEX_INSTANCE_ID='<instance-id>'
+```
+
+Или создайте файл `server/.env`:
+
+```shell
+YANDEX_IAM_TOKEN=<iam-token>
+YANDEX_FOLDER_ID=<folder-id>
+YANDEX_INSTANCE_ID=<instance-id>
+```
+
+```shell
 # Собрать и запустить REST API
-API_HOST_PORT=8080 docker compose -f docker-compose.api.yml up --build
+API_HOST_PORT=8080 docker-compose -f docker-compose.api.yml up --build
 
 # Или запустить REST API в фоне
-API_HOST_PORT=8080 docker compose -f docker-compose.api.yml up --build -d
+API_HOST_PORT=8080 docker-compose -f docker-compose.api.yml up --build -d
+
+# Проверить, что переменные попали в контейнер
+docker-compose -f docker-compose.api.yml exec api printenv | grep YANDEX
 
 # Остановить REST API
-docker compose -f docker-compose.api.yml down
+docker-compose -f docker-compose.api.yml down
 ```
 
 После старта REST API будет доступен по адресу:
@@ -107,7 +126,7 @@ docker compose -f docker-compose.api.yml down
 http://<api-server-host>:8080/api/files
 ```
 
-В `docker-compose.api.yml` включён доступ контейнера к GPU через `gpus: all`. На сервере должен быть установлен и настроен NVIDIA Container Toolkit.
+В `docker-compose.api.yml` включён доступ контейнера к GPU через `runtime: nvidia`, чтобы конфигурация работала со старым `docker-compose` v1. На сервере должен быть установлен и настроен NVIDIA Container Toolkit.
 
 ### Запуск сервера сайта
 
