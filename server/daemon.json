@@ -1,0 +1,28 @@
+{
+  "registry-mirrors": [
+    "https://mirror.gcr.io",
+    "https://docker.1ms.run",
+    "https://docker.1panel.live",
+    "https://docker.m.daocloud.io",
+    "https://dockerproxy.com",
+    "https://dockerpull.com",
+    "https://dockerhub.icu",
+    "https://hub.rat.dev",
+    "https://docker.registry.cyou",
+    "https://docker-cf.registry.cyou",
+    "https://docker.jsdelivr.fyi",
+    "https://docker.anyhub.us.kg",
+    "https://docker.chenby.cn",
+    "https://docker.awsl9527.cn",
+    "https://docker.hpcloud.cloud",
+    "https://docker.mrxn.net",
+    "https://docker.unsee.tech",
+    "https://docker.kejilion.pro",
+    "https://dockerpull.org",
+    "https://docker.amingg.com",
+    "https://docker.hlmirror.com",
+    "https://hub-mirror.c.163.com",
+    "https://mirror.ccs.tencentyun.com",
+    "https://docker.mirrors.ustc.edu.cn"
+  ]
+}
