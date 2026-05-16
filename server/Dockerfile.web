@@ -7,4 +7,3 @@ FROM eclipse-temurin:21-jre
 EXPOSE 8080
 WORKDIR /app
 COPY --from=build /workspace/composeApp/build/dist/composeWebCompatibility/productionExecutable /app/web
-RUN chmod +x /app/generate_csv.sh
