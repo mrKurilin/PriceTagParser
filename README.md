@@ -122,6 +122,10 @@ SITE_HOST_PORT=8081 docker compose -f docker-compose.site.yml up --build
 # Или запустить сайт в фоне
 SITE_HOST_PORT=8081 docker compose -f docker-compose.site.yml up --build -d
 
+# Проверить состояние контейнера и логи
+docker compose -f docker-compose.site.yml ps
+docker compose -f docker-compose.site.yml logs site
+
 # Остановить сайт
 docker compose -f docker-compose.site.yml down
 ```
@@ -131,6 +135,8 @@ docker compose -f docker-compose.site.yml down
 ```text
 http://<site-server-host>:8081
 ```
+
+Контейнер сайта запускает Ktor-сервер на внутреннем порту `8080` и отдаёт собранный Compose Web UI из `/app/web`. Внешний порт задаётся переменной `SITE_HOST_PORT`, по умолчанию используется `8081`.
 
 Web UI обращается к Ktor REST API напрямую через `Ktor Client`; на сервере обработки включён CORS для браузерных запросов.
 
