@@ -12,6 +12,11 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.contentOrNull
+import kotlinx.serialization.json.jsonArray
+import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
 import java.awt.Desktop
 import java.awt.FileDialog
 import java.awt.Frame
@@ -136,15 +141,16 @@ private fun yandexEnv(name: String): String =
     checkNotNull(System.getenv(name)?.takeIf { it.isNotBlank() }) { "$name is not configured" }
 
 private fun String.instancePowerStatus(instanceId: String): BackendPowerStatus {
-    val idIndex = indexOf("\"id\":\"$instanceId\"")
-        .takeIf { it >= 0 }
-        ?: indexOf("\"id\" : \"$instanceId\"")
-            .takeIf { it >= 0 }
-        ?: return BackendPowerStatus.Unknown
-    val yandexStatus = Regex("\"status\"\\s*:\\s*\"([^\"]+)\"")
-        .find(substring(idIndex))
-        ?.groupValues
-        ?.getOrNull(1)
+    val yandexStatus = Json.parseToJsonElement(this)
+        .jsonObject["instances"]
+        ?.jsonArray
+        ?.firstOrNull { instance ->
+            instance.jsonObject["id"]?.jsonPrimitive?.contentOrNull == instanceId
+        }
+        ?.jsonObject
+        ?.get("status")
+        ?.jsonPrimitive
+        ?.contentOrNull
         .orEmpty()
     return when (yandexStatus) {
         "RUNNING" -> BackendPowerStatus.Running

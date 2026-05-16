@@ -81,7 +81,7 @@
 
 Проект подготовлен для запуска на двух отдельных серверах:
 
-- **сервер сайта** — отдаёт собранный Compose Web UI через `nginx`;
+- **сервер сайта** — отдаёт собранный Compose Web UI как статические файлы;
 - **сервер обработки** — запускает REST API на Ktor, хранит файлы и выполняет обработку через `generate_csv.sh`.
 
 ### Запуск REST API сервера обработки с GPU
@@ -113,16 +113,14 @@ http://<api-server-host>:8080/api/files
 
 Команды выполняются на сервере сайта из папки `server`.
 
-В `API_BASE_URL` укажите внешний адрес REST API сервера обработки без завершающего `/`:
-
 ```shell
 cd server
 
 # Собрать и запустить сайт
-API_BASE_URL=http://<api-server-host>:8080 SITE_HOST_PORT=8081 docker compose -f docker-compose.site.yml up --build
+SITE_HOST_PORT=8081 docker compose -f docker-compose.site.yml up --build
 
 # Или запустить сайт в фоне
-API_BASE_URL=http://<api-server-host>:8080 SITE_HOST_PORT=8081 docker compose -f docker-compose.site.yml up --build -d
+SITE_HOST_PORT=8081 docker compose -f docker-compose.site.yml up --build -d
 
 # Остановить сайт
 docker compose -f docker-compose.site.yml down
@@ -134,7 +132,7 @@ docker compose -f docker-compose.site.yml down
 http://<site-server-host>:8081
 ```
 
-`nginx` на сервере сайта проксирует запросы `/api/...` на `API_BASE_URL`, поэтому браузеру не нужен отдельный CORS-конфиг.
+Web UI обращается к Ktor REST API напрямую через `Ktor Client`; на сервере обработки включён CORS для браузерных запросов.
 
 ### Локальная проверка двух серверов на одной машине
 
@@ -145,7 +143,7 @@ http://<site-server-host>:8081
 API_HOST_PORT=8080 docker compose -f docker-compose.api.yml up --build
 
 # Терминал 2: сайт
-API_BASE_URL=http://host.docker.internal:8080 SITE_HOST_PORT=8081 docker compose -f docker-compose.site.yml up --build
+SITE_HOST_PORT=8081 docker compose -f docker-compose.site.yml up --build
 ```
 
 Откройте сайт:
@@ -176,11 +174,9 @@ http://localhost:8081
 - **`NVIDIA_VISIBLE_DEVICES=all`** — доступные GPU;
 - **`NVIDIA_DRIVER_CAPABILITIES=compute,utility`** — возможности NVIDIA runtime для обработки.
 
-В `server/docker-compose.site.yml` используются:
+В `server/docker-compose.site.yml` используется:
 
-- **`SITE_HOST_PORT=8081`** — порт сайта на хосте;
-- **`SITE_PORT=80`** — порт `nginx` внутри контейнера;
-- **`API_BASE_URL=http://<api-server-host>:8080`** — адрес REST API сервера обработки.
+- **`SITE_HOST_PORT=8081`** — порт сайта на хосте.
 
 ### Проверка production-сборки без Docker
 

@@ -8,9 +8,11 @@ import io.ktor.http.HttpStatusCode
 import io.ktor.http.content.PartData
 import io.ktor.http.content.forEachPart
 import io.ktor.server.application.Application
+import io.ktor.server.application.install
 import io.ktor.server.engine.embeddedServer
 import io.ktor.server.http.content.LocalFileContent
 import io.ktor.server.netty.Netty
+import io.ktor.server.plugins.cors.routing.CORS
 import io.ktor.server.request.header
 import io.ktor.server.request.receiveMultipart
 import io.ktor.server.response.header
@@ -26,6 +28,11 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.contentOrNull
+import kotlinx.serialization.json.jsonArray
+import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
 import java.io.File
 import java.io.OutputStream
 import java.net.URI
@@ -51,6 +58,12 @@ fun main() {
 fun Application.module() {
     filesDirectory.mkdirs()
     println("[Server] started: filesDirectory=${filesDirectory.absolutePath}, webDirectory=${webDirectory.absolutePath}")
+
+    install(CORS) {
+        anyHost()
+        allowHeader(HttpHeaders.ContentType)
+        allowHeader(HttpHeaders.Authorization)
+    }
 
     routing {
         get("/") {
@@ -269,16 +282,17 @@ private class YandexBackendManager(
 
 private class UploadTooLargeException : RuntimeException()
 
-private fun String.instancePowerStatus(instanceId: String): String {
-    val idIndex = indexOf("\"id\":\"$instanceId\"")
-        .takeIf { it >= 0 }
-        ?: indexOf("\"id\" : \"$instanceId\"")
-            .takeIf { it >= 0 }
-        ?: return "Unknown"
-    val yandexStatus = Regex("\"status\"\\s*:\\s*\"([^\"]+)\"")
-        .find(substring(idIndex))
-        ?.groupValues
-        ?.getOrNull(1)
+internal fun String.instancePowerStatus(instanceId: String): String {
+    val yandexStatus = Json.parseToJsonElement(this)
+        .jsonObject["instances"]
+        ?.jsonArray
+        ?.firstOrNull { instance ->
+            instance.jsonObject["id"]?.jsonPrimitive?.contentOrNull == instanceId
+        }
+        ?.jsonObject
+        ?.get("status")
+        ?.jsonPrimitive
+        ?.contentOrNull
         .orEmpty()
     return when (yandexStatus) {
         "RUNNING" -> "Running"
@@ -325,10 +339,10 @@ private fun File.priceFilesJson(): String {
         .joinToString(prefix = "[", postfix = "]") { file ->
             val csvName = "${file.nameWithoutExtension}.csv"
             "{" +
-                "\"name\":\"${file.name.escapeJson()}\"," +
-                "\"csvName\":\"${csvName.escapeJson()}\"," +
-                "\"hasCsv\":${file.nameWithoutExtension in csvNames}" +
-                "}"
+                    "\"name\":\"${file.name.escapeJson()}\"," +
+                    "\"csvName\":\"${csvName.escapeJson()}\"," +
+                    "\"hasCsv\":${file.nameWithoutExtension in csvNames}" +
+                    "}"
         }
 }
 

@@ -6,7 +6,6 @@ import androidx.compose.runtime.Composable
 import kotlinx.browser.document
 import kotlinx.browser.window
 import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.await
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.suspendCancellableCoroutine
 import org.w3c.dom.HTMLInputElement
@@ -14,36 +13,14 @@ import org.w3c.dom.asList
 import org.w3c.xhr.FormData
 import org.w3c.xhr.XMLHttpRequest
 import kotlin.coroutines.resume
-import kotlin.js.ExperimentalWasmJsInterop
-import kotlin.js.Json
 
-@OptIn(ExperimentalWasmJsInterop::class)
-internal actual suspend fun fetchFiles(): List<PricesFile> {
-    console.log("[FileApi/JS] fetchFiles: starting fetch")
-    val response = window.fetch("/api/files").await()
-    console.log("[FileApi/JS] fetchFiles: response status=${response.status}, ok=${response.ok}")
-    if (!response.ok) error("Files request failed")
-    val json = response.json().await()
-    console.log("[FileApi/JS] fetchFiles: json parsed")
-    val payload = json.unsafeCast<Array<Json>>()
-    console.log("[FileApi/JS] fetchFiles: payload length=${payload.length}")
-    payload.forEachIndexed { index, item ->
-        console.log("[FileApi/JS] fetchFiles: item[$index] name=${item["name"]}")
-    }
-    return payload.map { item ->
-        PricesFile(
-            name = item["name"] as String,
-            csvName = item["csvName"] as String,
-            hasCsv = item["hasCsv"] as Boolean,
-        )
-    }
-}
+internal actual suspend fun fetchFiles(): List<PricesFile> = fetchBackendFiles(apiBaseUrl())
 
-internal actual suspend fun fetchBackendStatus(): BackendStatus = fetchBackend("/api/backend/status")
+internal actual suspend fun fetchBackendStatus(): BackendStatus = fetchBackendPowerStatus(apiBaseUrl())
 
-internal actual suspend fun startBackend(): BackendStatus = fetchBackend("/api/backend/start", method = "POST")
+internal actual suspend fun startBackend(): BackendStatus = startBackendProcessing(apiBaseUrl())
 
-internal actual suspend fun stopBackend(): BackendStatus = fetchBackend("/api/backend/stop", method = "POST")
+internal actual suspend fun stopBackend(): BackendStatus = stopBackendProcessing(apiBaseUrl())
 
 @Composable
 internal actual fun CompletedFileActions(file: PricesFile) {
@@ -53,7 +30,7 @@ internal actual fun CompletedFileActions(file: PricesFile) {
 }
 
 internal actual fun downloadCsv(fileName: String) {
-    window.location.href = "/api/files/$fileName/download"
+    window.location.href = "${apiBaseUrl()}/api/files/$fileName/download"
 }
 
 internal actual fun pickAndUploadFile(
@@ -77,6 +54,7 @@ internal actual fun pickAndUploadFile(
             ) {
                 onUploadStarted(file.name)
                 uploadFile(
+                    url = "${apiBaseUrl()}/api/upload",
                     file = file,
                     onProgress = { progress -> onUploadProgress(file.name, progress) },
                 )
@@ -88,35 +66,14 @@ internal actual fun pickAndUploadFile(
     input.click()
 }
 
-private suspend fun fetchBackend(path: String, method: String = "GET"): BackendStatus = suspendCancellableCoroutine { continuation ->
-    val request = XMLHttpRequest()
-    request.open(method, path)
-    request.onload = {
-        if (request.status in 200..299) {
-            continuation.resume(request.responseText.parseBackendStatus())
-        } else {
-            continuation.cancel(Throwable("Backend request failed with status ${request.status}"))
-        }
-    }
-    request.onerror = {
-        continuation.cancel(Throwable("Backend request failed"))
-    }
-    request.onabort = {
-        continuation.cancel(Throwable("Backend request aborted"))
-    }
-    continuation.invokeOnCancellation {
-        request.abort()
-    }
-    request.send()
-}
-
 private suspend fun uploadFile(
+    url: String,
     file: org.w3c.files.File,
     onProgress: (Int) -> Unit,
 ) {
     suspendCancellableCoroutine { continuation ->
         val request = XMLHttpRequest()
-        request.open("POST", "/api/upload")
+        request.open("POST", url)
         request.upload.onprogress = { event ->
             if (event.lengthComputable) {
                 val loaded = event.loaded.toDouble()
@@ -147,6 +104,10 @@ private suspend fun uploadFile(
         request.send(formData)
     }
 }
+
+private fun apiBaseUrl(): String = window.location.origin.takeIf { origin ->
+    window.location.port == SERVER_PORT.toString() || origin.isBlank()
+} ?: "${window.location.protocol}//${window.location.hostname}:$SERVER_PORT"
 
 private fun CoroutineScope.launchSafely(
     fileName: String,

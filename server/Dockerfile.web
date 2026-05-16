@@ -3,6 +3,8 @@ WORKDIR /workspace
 COPY . .
 RUN ./gradlew :composeApp:composeCompatibilityBrowserDistribution --no-daemon
 
-FROM nginx:1.27-alpine
-COPY server/nginx.site.conf /etc/nginx/templates/default.conf.template
-COPY --from=build /workspace/composeApp/build/dist/composeWebCompatibility/productionExecutable /usr/share/nginx/html
+FROM busybox:1.37
+WORKDIR /www
+COPY --from=build /workspace/composeApp/build/dist/composeWebCompatibility/productionExecutable /www
+EXPOSE 80
+CMD ["httpd", "-f", "-p", "80", "-h", "/www"]

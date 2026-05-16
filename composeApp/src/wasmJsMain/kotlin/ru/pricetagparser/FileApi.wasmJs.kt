@@ -6,37 +6,22 @@ import androidx.compose.runtime.Composable
 import kotlinx.browser.document
 import kotlinx.browser.window
 import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.await
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.suspendCancellableCoroutine
 import org.w3c.dom.HTMLInputElement
 import org.w3c.dom.asList
-import org.w3c.fetch.Response
 import org.w3c.xhr.FormData
 import org.w3c.xhr.XMLHttpRequest
 import kotlin.coroutines.resume
 import kotlin.js.ExperimentalWasmJsInterop
-import kotlin.js.Promise
 
-@OptIn(ExperimentalWasmJsInterop::class)
-internal actual suspend fun fetchFiles(): List<PricesFile> {
-    val url = apiUrl("/api/files")
-    println("[FileApi/WASM] fetchFiles: starting, url=$url")
-    val response = window.fetch(url).await<Response>()
-    println("[FileApi/WASM] fetchFiles: response ok=${response.ok}, status=${response.status}")
-    val text = response.text().unsafeCast<Promise<JsAny?>>().await<JsAny?>().toString()
-    println("[FileApi/WASM] fetchFiles: raw text length=${text.length}, first 200=${text.take(200)}")
-    return text.parseFilesJson()
-}
+internal actual suspend fun fetchFiles(): List<PricesFile> = fetchBackendFiles(apiBaseUrl())
 
-@OptIn(ExperimentalWasmJsInterop::class)
-internal actual suspend fun fetchBackendStatus(): BackendStatus = fetchBackend("/api/backend/status")
+internal actual suspend fun fetchBackendStatus(): BackendStatus = fetchBackendPowerStatus(apiBaseUrl())
 
-@OptIn(ExperimentalWasmJsInterop::class)
-internal actual suspend fun startBackend(): BackendStatus = fetchBackend("/api/backend/start", method = "POST")
+internal actual suspend fun startBackend(): BackendStatus = startBackendProcessing(apiBaseUrl())
 
-@OptIn(ExperimentalWasmJsInterop::class)
-internal actual suspend fun stopBackend(): BackendStatus = fetchBackend("/api/backend/stop", method = "POST")
+internal actual suspend fun stopBackend(): BackendStatus = stopBackendProcessing(apiBaseUrl())
 
 @Composable
 internal actual fun CompletedFileActions(file: PricesFile) {
@@ -46,7 +31,7 @@ internal actual fun CompletedFileActions(file: PricesFile) {
 }
 
 internal actual fun downloadCsv(fileName: String) {
-    val url = apiUrl("/api/files/$fileName/download")
+    val url = "${apiBaseUrl()}/api/files/$fileName/download"
     println("[FileApi] downloadCsv: fileName=$fileName, url=$url")
     window.location.href = url
 }
@@ -74,7 +59,7 @@ internal actual fun pickAndUploadFile(
                 onUploadingChanged(true)
                 onUploadStarted(file.name)
                 try {
-                    val url = apiUrl("/api/upload")
+                    val url = "${apiBaseUrl()}/api/upload"
                     println("[FileApi] upload: xhr start url=$url, origin=${window.location.origin}")
                     uploadFile(
                         url = url,
@@ -97,28 +82,6 @@ internal actual fun pickAndUploadFile(
     }
     println("[FileApi] pickAndUploadFile: click input")
     input.click()
-}
-
-private suspend fun fetchBackend(path: String, method: String = "GET"): BackendStatus = suspendCancellableCoroutine { continuation ->
-    val request = XMLHttpRequest()
-    request.open(method, apiUrl(path))
-    request.onload = {
-        if (request.status in 200..299) {
-            continuation.resume(request.responseText.parseBackendStatus())
-        } else {
-            continuation.cancel(Throwable("Backend request failed with status ${request.status}"))
-        }
-    }
-    request.onerror = {
-        continuation.cancel(Throwable("Backend request failed"))
-    }
-    request.onabort = {
-        continuation.cancel(Throwable("Backend request aborted"))
-    }
-    continuation.invokeOnCancellation {
-        request.abort()
-    }
-    request.send()
 }
 
 @OptIn(ExperimentalWasmJsInterop::class)
@@ -162,35 +125,6 @@ private suspend fun uploadFile(
     }
 }
 
-private fun apiUrl(path: String): String =
-    if (window.location.port == SERVER_PORT.toString()) {
-        path
-    } else {
-        "http://localhost:$SERVER_PORT$path"
-    }
-
-private fun String.parseFilesJson(): List<PricesFile> {
-    val trimmed = trim()
-    if (trimmed.length <= 2) return emptyList()
-    val items = trimmed
-        .removePrefix("[")
-        .removeSuffix("]")
-        .split(Regex("}\\s*,\\s*\\{"))
-        .map { item -> item.removePrefix("{").removeSuffix("}") }
-
-    println("[FileApi/WASM] parseFilesJson: parsed items length=${items.size}")
-    return items.map { item ->
-        val values = item
-            .split(Regex(",\\s*\""))
-            .associate { field ->
-                val normalized = field.trim().removePrefix("\"")
-                val parts = normalized.split(":", limit = 2)
-                parts.first().trim().trim('"') to parts.last().trim().trim('"')
-            }
-        PricesFile(
-            name = values.getValue("name"),
-            csvName = values.getValue("csvName"),
-            hasCsv = values["hasCsv"].toBoolean(),
-        )
-    }
-}
+private fun apiBaseUrl(): String = window.location.origin.takeIf { origin ->
+    window.location.port == SERVER_PORT.toString() || origin.isBlank()
+} ?: "${window.location.protocol}//${window.location.hostname}:$SERVER_PORT"
