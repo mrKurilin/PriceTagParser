@@ -71,55 +71,116 @@
 - **Windows**: `msi`
 - **Linux**: `deb`
 
-## 2. Инструкция по разворачиванию web-приложения на сервере
+## 2. Инструкция по разворачиванию web-приложения и REST API на разных серверах
 
 ### Требования
 
 - **Docker**
 - **Docker Compose**
+- **NVIDIA Container Toolkit** на сервере обработки, если обработка должна использовать GPU
 
-### Запуск через Docker Compose
+Проект подготовлен для запуска на двух отдельных серверах:
 
-Все команды выполняются из корня проекта:
+- **сервер сайта** — отдаёт собранный Compose Web UI через `nginx`;
+- **сервер обработки** — запускает REST API на Ktor, хранит файлы и выполняет обработку через `generate_csv.sh`.
+
+### Запуск REST API сервера обработки с GPU
+
+Команды выполняются на сервере обработки из папки `server`:
 
 ```shell
 cd server
 
-# Собрать и запустить приложение
-docker compose up --build
+# Собрать и запустить REST API
+API_HOST_PORT=8080 docker compose -f docker-compose.api.yml up --build
 
-# Или собрать и запустить приложение в фоне
-docker compose up --build -d
+# Или запустить REST API в фоне
+API_HOST_PORT=8080 docker compose -f docker-compose.api.yml up --build -d
 
-# Остановить приложение
-docker compose down
+# Остановить REST API
+docker compose -f docker-compose.api.yml down
 ```
 
-После старта приложение будет доступно по адресу:
+После старта REST API будет доступен по адресу:
 
 ```text
-http://localhost:8080
+http://<api-server-host>:8080/api/files
+```
+
+В `docker-compose.api.yml` включён доступ контейнера к GPU через `gpus: all`. На сервере должен быть установлен и настроен NVIDIA Container Toolkit.
+
+### Запуск сервера сайта
+
+Команды выполняются на сервере сайта из папки `server`.
+
+В `API_BASE_URL` укажите внешний адрес REST API сервера обработки без завершающего `/`:
+
+```shell
+cd server
+
+# Собрать и запустить сайт
+API_BASE_URL=http://<api-server-host>:8080 SITE_HOST_PORT=8081 docker compose -f docker-compose.site.yml up --build
+
+# Или запустить сайт в фоне
+API_BASE_URL=http://<api-server-host>:8080 SITE_HOST_PORT=8081 docker compose -f docker-compose.site.yml up --build -d
+
+# Остановить сайт
+docker compose -f docker-compose.site.yml down
+```
+
+После старта сайт будет доступен по адресу:
+
+```text
+http://<site-server-host>:8081
+```
+
+`nginx` на сервере сайта проксирует запросы `/api/...` на `API_BASE_URL`, поэтому браузеру не нужен отдельный CORS-конфиг.
+
+### Локальная проверка двух серверов на одной машине
+
+В двух разных терминалах из папки `server`:
+
+```shell
+# Терминал 1: REST API
+API_HOST_PORT=8080 docker compose -f docker-compose.api.yml up --build
+
+# Терминал 2: сайт
+API_BASE_URL=http://host.docker.internal:8080 SITE_HOST_PORT=8081 docker compose -f docker-compose.site.yml up --build
+```
+
+Откройте сайт:
+
+```text
+http://localhost:8081
 ```
 
 ### Где хранятся файлы
 
-В Docker Compose папка `server/files` на хосте подключается в контейнер как `/app/files`.
+В `docker-compose.api.yml` папка `server/files` на сервере обработки подключается в контейнер как `/app/files`.
 
 Это значит:
 
-- при выборе файла web UI показывает **«Загрузка N%»** до завершения отправки файла на сервер;
-- загруженные через web файлы сохраняются в `server/files`;
+- при выборе файла web UI показывает **«Загрузка N%»** до завершения отправки файла на REST API;
+- загруженные через web файлы сохраняются в `server/files` на сервере обработки;
 - CSV создаётся рядом с исходным файлом;
 - состояние **«Обработка»** определяется отсутствием CSV;
 - состояние готовности определяется наличием CSV с тем же базовым именем.
 
 ### Полезные переменные окружения
 
-В `server/docker-compose.yml` используются:
+В `server/docker-compose.api.yml` используются:
 
-- **`SERVER_PORT=8080`** — порт Ktor-сервера;
-- **`WEB_DIR=/app/web`** — путь к собранному web UI внутри контейнера;
-- **`PRICE_TAG_PARSER_SCRIPT=/app/generate_csv.sh`** — путь к скрипту генерации CSV внутри контейнера.
+- **`API_HOST_PORT=8080`** — порт REST API на хосте;
+- **`SERVER_PORT=8080`** — порт Ktor REST API внутри контейнера;
+- **`PRICE_TAG_PARSER_SCRIPT=/app/generate_csv.sh`** — путь к скрипту генерации CSV внутри контейнера;
+- **`NVIDIA_VISIBLE_DEVICES=all`** — доступные GPU;
+- **`NVIDIA_DRIVER_CAPABILITIES=compute,utility`** — возможности NVIDIA runtime для обработки.
+
+В `server/docker-compose.site.yml` используются:
+
+- **`SITE_HOST_PORT=8081`** — порт сайта на хосте;
+- **`SITE_PORT=80`** — порт `nginx` внутри контейнера;
+- **`API_BASE_URL=http://<api-server-host>:8080`** — адрес REST API сервера обработки.
 
 ### Проверка production-сборки без Docker
 

@@ -1,0 +1,8 @@
+FROM gradle:8.14.3-jdk21 AS build
+WORKDIR /workspace
+COPY . .
+RUN ./gradlew :composeApp:composeCompatibilityBrowserDistribution --no-daemon
+
+FROM nginx:1.27-alpine
+COPY server/nginx.site.conf /etc/nginx/templates/default.conf.template
+COPY --from=build /workspace/composeApp/build/dist/composeWebCompatibility/productionExecutable /usr/share/nginx/html

@@ -1,0 +1,16 @@
+services:
+  api:
+    build:
+      context: ..
+      dockerfile: server/Dockerfile.api
+    ports:
+      - "${API_HOST_PORT:-8080}:8080"
+    environment:
+      - SERVER_PORT=8080
+      - PRICE_TAG_PARSER_SCRIPT=/app/generate_csv.sh
+      - NVIDIA_VISIBLE_DEVICES=all
+      - NVIDIA_DRIVER_CAPABILITIES=compute,utility
+    volumes:
+      - ./files:/app/files
+    gpus: all
+    restart: always
