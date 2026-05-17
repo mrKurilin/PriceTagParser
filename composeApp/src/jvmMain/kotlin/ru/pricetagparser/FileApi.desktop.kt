@@ -14,7 +14,6 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.contentOrNull
-import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import java.awt.Desktop
@@ -50,19 +49,26 @@ internal actual suspend fun fetchFiles(): List<PricesFile> = withContext(Dispatc
         }
 }
 
+internal actual fun loadBackendInstanceId(): String = loadYandexEnvironment().instanceId
+
 internal actual suspend fun fetchBackendStatus(): BackendStatus = withContext(Dispatchers.IO) {
     val environment = loadYandexEnvironment()
     val response = sendYandexRequest(
-        uri = "$YANDEX_COMPUTE_API_BASE_URL/instances?folderId=${environment.folderId}",
+        uri = "$BACKEND_STATUS_API_BASE_URL$BACKEND_INSTANCE_API_PATH/${environment.instanceId}",
         environment = environment,
     )
-    BackendStatus(response.body().instancePowerStatus(environment.instanceId))
+    val yandexStatus = Json.parseToJsonElement(response.body())
+        .jsonObject["status"]
+        ?.jsonPrimitive
+        ?.contentOrNull
+        .orEmpty()
+    BackendStatus(yandexStatusToBackendPowerStatus(yandexStatus))
 }
 
 internal actual suspend fun startBackend(): BackendStatus = withContext(Dispatchers.IO) {
     val environment = loadYandexEnvironment()
     sendYandexRequest(
-        uri = "$YANDEX_COMPUTE_API_BASE_URL/instances/${environment.instanceId}:start",
+        uri = "$BACKEND_STATUS_API_BASE_URL$BACKEND_INSTANCE_API_PATH/${environment.instanceId}$BACKEND_START_ACTION",
         method = "POST",
         environment = environment,
     )
@@ -72,7 +78,7 @@ internal actual suspend fun startBackend(): BackendStatus = withContext(Dispatch
 internal actual suspend fun stopBackend(): BackendStatus = withContext(Dispatchers.IO) {
     val environment = loadYandexEnvironment()
     sendYandexRequest(
-        uri = "$YANDEX_COMPUTE_API_BASE_URL/instances/${environment.instanceId}:stop",
+        uri = "$BACKEND_STATUS_API_BASE_URL$BACKEND_INSTANCE_API_PATH/${environment.instanceId}$BACKEND_STOP_ACTION",
         method = "POST",
         environment = environment,
     )
@@ -139,27 +145,6 @@ private fun sendYandexRequest(
     val response = httpClient.send(request, HttpResponse.BodyHandlers.ofString())
     if (response.statusCode() !in 200..299) error("Yandex Compute API request failed")
     return response
-}
-
-private fun String.instancePowerStatus(instanceId: String): BackendPowerStatus {
-    val yandexStatus = Json.parseToJsonElement(this)
-        .jsonObject["instances"]
-        ?.jsonArray
-        ?.firstOrNull { instance ->
-            instance.jsonObject["id"]?.jsonPrimitive?.contentOrNull == instanceId
-        }
-        ?.jsonObject
-        ?.get("status")
-        ?.jsonPrimitive
-        ?.contentOrNull
-        .orEmpty()
-    return when (yandexStatus) {
-        "RUNNING" -> BackendPowerStatus.Running
-        "STOPPED" -> BackendPowerStatus.Stopped
-        "STARTING", "PROVISIONING" -> BackendPowerStatus.Starting
-        "STOPPING" -> BackendPowerStatus.Stopping
-        else -> BackendPowerStatus.Unknown
-    }
 }
 
 private fun openCsvFile(fileName: String) {

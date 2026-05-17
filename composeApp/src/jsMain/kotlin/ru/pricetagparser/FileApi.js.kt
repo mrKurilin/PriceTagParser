@@ -14,6 +14,8 @@ import org.w3c.xhr.FormData
 import org.w3c.xhr.XMLHttpRequest
 import kotlin.coroutines.resume
 
+internal actual fun loadBackendInstanceId(): String = js("window.__YANDEX_INSTANCE_ID__ || ''")
+
 internal actual suspend fun fetchFiles(): List<PricesFile> = fetchBackendFiles()
 
 internal actual suspend fun fetchBackendStatus(): BackendStatus = fetchBackendStatusViaApi()

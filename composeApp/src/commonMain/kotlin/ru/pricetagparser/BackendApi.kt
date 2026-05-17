@@ -11,6 +11,8 @@ import io.ktor.serialization.kotlinx.json.json
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 
+internal expect fun loadBackendInstanceId(): String
+
 private val apiHttpClient = HttpClient {
     install(ContentNegotiation) {
         json(
@@ -33,8 +35,8 @@ private data class PriceFileResponse(
 )
 
 @Serializable
-private data class BackendStatusResponse(
-    val powerStatus: String,
+private data class YandexInstanceResponse(
+    val status: String,
 )
 
 internal suspend fun fetchBackendFiles(): List<PricesFile> = apiHttpClient
@@ -49,26 +51,20 @@ internal suspend fun fetchBackendFiles(): List<PricesFile> = apiHttpClient
     }
 
 internal suspend fun fetchBackendStatusViaApi(): BackendStatus = apiHttpClient
-    .get("$BACKEND_STATUS_API_BASE_URL$BACKEND_STATUS_API_PATH")
-    .body<BackendStatusResponse>()
+    .get("$BACKEND_STATUS_API_BASE_URL$BACKEND_INSTANCE_API_PATH/${loadBackendInstanceId()}")
+    .body<YandexInstanceResponse>()
     .toBackendStatus()
 
 internal suspend fun startBackendViaApi(): BackendStatus = apiHttpClient
-    .post("$BACKEND_STATUS_API_BASE_URL$BACKEND_START_API_PATH")
-    .body<BackendStatusResponse>()
+    .post("$BACKEND_STATUS_API_BASE_URL$BACKEND_INSTANCE_API_PATH/${loadBackendInstanceId()}$BACKEND_START_ACTION")
+    .body<YandexInstanceResponse>()
     .toBackendStatus()
 
 internal suspend fun stopBackendViaApi(): BackendStatus = apiHttpClient
-    .post("$BACKEND_STATUS_API_BASE_URL$BACKEND_STOP_API_PATH")
-    .body<BackendStatusResponse>()
+    .post("$BACKEND_STATUS_API_BASE_URL$BACKEND_INSTANCE_API_PATH/${loadBackendInstanceId()}$BACKEND_STOP_ACTION")
+    .body<YandexInstanceResponse>()
     .toBackendStatus()
 
-private fun BackendStatusResponse.toBackendStatus(): BackendStatus = BackendStatus(
-    powerStatus = when (powerStatus) {
-        "Running" -> BackendPowerStatus.Running
-        "Stopped" -> BackendPowerStatus.Stopped
-        "Starting" -> BackendPowerStatus.Starting
-        "Stopping" -> BackendPowerStatus.Stopping
-        else -> BackendPowerStatus.Unknown
-    },
+private fun YandexInstanceResponse.toBackendStatus(): BackendStatus = BackendStatus(
+    powerStatus = yandexStatusToBackendPowerStatus(status),
 )

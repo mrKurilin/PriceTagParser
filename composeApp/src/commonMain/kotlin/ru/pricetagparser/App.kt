@@ -53,18 +53,6 @@ internal data class PricesFile(
     val uploadFailed: Boolean = false,
 )
 
-internal enum class BackendPowerStatus {
-    Running,
-    Stopped,
-    Starting,
-    Stopping,
-    Unknown,
-}
-
-internal data class BackendStatus(
-    val powerStatus: BackendPowerStatus,
-)
-
 @Composable
 fun App() {
     MaterialTheme {
@@ -622,22 +610,6 @@ private fun CoroutineScope.launchSafely(
             onError()
         }
     }
-}
-
-internal fun String.parseBackendStatus(): BackendStatus {
-    val status = Regex("\"powerStatus\"\\s*:\\s*\"([^\"]+)\"")
-        .find(this)
-        ?.groupValues
-        ?.getOrNull(1)
-    return BackendStatus(
-        powerStatus = when (status) {
-            "Running" -> BackendPowerStatus.Running
-            "Stopped" -> BackendPowerStatus.Stopped
-            "Starting" -> BackendPowerStatus.Starting
-            "Stopping" -> BackendPowerStatus.Stopping
-            else -> BackendPowerStatus.Unknown
-        },
-    )
 }
 
 internal expect suspend fun fetchFiles(): List<PricesFile>
