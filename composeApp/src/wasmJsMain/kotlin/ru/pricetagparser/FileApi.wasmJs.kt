@@ -15,19 +15,7 @@ import org.w3c.xhr.XMLHttpRequest
 import kotlin.coroutines.resume
 import kotlin.js.ExperimentalWasmJsInterop
 
-internal actual val backendControlApiBaseUrl: String = ""
-
-internal actual fun loadBackendInstanceId(): String = ""
-
-internal actual fun loadYandexIamToken(): String = ""
-
 internal actual suspend fun fetchFiles(): List<PricesFile> = fetchBackendFiles()
-
-internal actual suspend fun fetchBackendStatus(): BackendStatus = fetchBackendStatusViaApi()
-
-internal actual suspend fun startBackend(): BackendStatus = startBackendViaApi()
-
-internal actual suspend fun stopBackend(): BackendStatus = stopBackendViaApi()
 
 @Composable
 internal actual fun CompletedFileActions(file: PricesFile) {
