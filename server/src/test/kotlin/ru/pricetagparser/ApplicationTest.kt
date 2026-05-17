@@ -9,22 +9,6 @@ import kotlin.test.*
 class ApplicationTest {
 
     @Test
-    fun parsesYandexInstanceStatusWithFormattedJson() {
-        val response = """
-            {
-             "instances": [
-              {
-               "id": "epd0j7jvi4buujhjr5c9",
-               "status": "STOPPED"
-              }
-             ]
-            }
-        """.trimIndent()
-
-        assertEquals("Stopped", response.instancePowerStatus("epd0j7jvi4buujhjr5c9"))
-    }
-
-    @Test
     fun testRoot() = testApplication {
         application {
             module()

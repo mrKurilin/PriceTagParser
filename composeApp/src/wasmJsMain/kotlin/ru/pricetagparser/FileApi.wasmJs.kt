@@ -18,6 +18,9 @@ import kotlin.js.ExperimentalWasmJsInterop
 @OptIn(ExperimentalWasmJsInterop::class)
 internal actual fun loadBackendInstanceId(): String = js("window.__YANDEX_INSTANCE_ID__ || ''")
 
+@OptIn(ExperimentalWasmJsInterop::class)
+internal actual fun loadYandexIamToken(): String = js("window.__YANDEX_IAM_TOKEN__ || ''")
+
 internal actual suspend fun fetchFiles(): List<PricesFile> = fetchBackendFiles()
 
 internal actual suspend fun fetchBackendStatus(): BackendStatus = fetchBackendStatusViaApi()

@@ -51,6 +51,8 @@ internal actual suspend fun fetchFiles(): List<PricesFile> = withContext(Dispatc
 
 internal actual fun loadBackendInstanceId(): String = loadYandexEnvironment().instanceId
 
+internal actual fun loadYandexIamToken(): String = loadYandexEnvironment().iamToken
+
 internal actual suspend fun fetchBackendStatus(): BackendStatus = withContext(Dispatchers.IO) {
     val environment = loadYandexEnvironment()
     val response = sendYandexRequest(
