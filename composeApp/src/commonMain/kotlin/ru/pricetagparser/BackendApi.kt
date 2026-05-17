@@ -10,8 +10,6 @@ import io.ktor.serialization.kotlinx.json.json
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 
-internal expect val backendControlApiBaseUrl: String
-
 private val apiHttpClient = HttpClient {
     install(ContentNegotiation) {
         json(
