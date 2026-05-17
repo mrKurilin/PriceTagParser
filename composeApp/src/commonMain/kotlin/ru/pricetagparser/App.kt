@@ -67,71 +67,6 @@ fun App() {
         var backendErrorMessage by remember { mutableStateOf<String?>(null) }
         var refreshProgress by remember { mutableStateOf(0f) }
 
-        fun replaceFile(file: PricesFile) {
-            files = listOf(file) + files.filterNot { it.name == file.name }
-        }
-
-        suspend fun loadFiles() {
-            isLoading = true
-            errorMessage = null
-            try {
-                files = fetchFiles()
-            } catch (_: Throwable) {
-                errorMessage = "Не удалось загрузить список файлов"
-            } finally {
-                isLoading = false
-            }
-        }
-
-        suspend fun loadBackendStatus() {
-            backendErrorMessage = null
-            try {
-                backendStatus = fetchBackendStatus()
-            } catch (error: Throwable) {
-                backendStatus = BackendStatus(BackendPowerStatus.Unknown)
-                backendErrorMessage = "Не удалось получить статус бэка:\n${error.message}"
-            }
-        }
-
-        suspend fun refreshData() = coroutineScope {
-            launch { loadBackendStatus() }
-            launch { loadFiles() }
-        }
-
-        fun setBackendEnabled(enabled: Boolean) {
-            scope.launchSafely(
-                onError = {
-                    backendErrorMessage = if (enabled) {
-                        "Не удалось включить бэк"
-                    } else {
-                        "Не удалось выключить бэк"
-                    }
-                    isBackendActionRunning = false
-                },
-            ) {
-                isBackendActionRunning = true
-                backendErrorMessage = null
-                backendStatus = BackendStatus(
-                    if (enabled) BackendPowerStatus.Starting else BackendPowerStatus.Stopping,
-                )
-                backendStatus = if (enabled) startBackend() else stopBackend()
-                isBackendActionRunning = false
-            }
-        }
-
-        LaunchedEffect(Unit) {
-            refreshData()
-            while (true) {
-                repeat(REFRESH_INTERVAL_SECONDS) { second ->
-                    refreshProgress = second.toFloat() / REFRESH_INTERVAL_SECONDS
-                    delay(1_000)
-                }
-                refreshProgress = 1f
-                refreshData()
-                refreshProgress = 0f
-            }
-        }
-
         Surface(
             modifier = Modifier.fillMaxSize(),
             color = Color(0xFFF6F7FB),
@@ -163,7 +98,15 @@ fun App() {
                         status = backendStatus,
                         isActionRunning = isBackendActionRunning,
                         errorMessage = backendErrorMessage,
-                        onEnabledChanged = ::setBackendEnabled,
+                        onEnabledChanged = { enabled ->
+                            changeBackendPower(
+                                scope = scope,
+                                enabled = enabled,
+                                onActionRunningChanged = { isBackendActionRunning = it },
+                                onErrorChanged = { backendErrorMessage = it },
+                                onStatusChanged = { backendStatus = it },
+                            )
+                        },
                     )
 
                     Spacer(modifier = Modifier.height(24.dp))
@@ -174,7 +117,11 @@ fun App() {
                         errorMessage = errorMessage,
                         onRetry = {
                             scope.launchSafely {
-                                loadFiles()
+                                loadFiles(
+                                    onLoadingChanged = { isLoading = it },
+                                    onFilesLoaded = { files = it },
+                                    onErrorChanged = { errorMessage = it },
+                                )
                             }
                         },
                     )
@@ -187,10 +134,14 @@ fun App() {
                         startUpload(
                             scope = scope,
                             onUploadingChanged = { isUploading = it },
-                            onFileChanged = ::replaceFile,
+                            onFileChanged = { file -> files = files.replacingFile(file) },
                             onUploaded = {
                                 scope.launchSafely {
-                                    loadFiles()
+                                    loadFiles(
+                                        onLoadingChanged = { isLoading = it },
+                                        onFilesLoaded = { files = it },
+                                        onErrorChanged = { errorMessage = it },
+                                    )
                                 }
                             },
                             onError = { errorMessage = "Не удалось загрузить файл" },
@@ -199,6 +150,120 @@ fun App() {
                 )
             }
         }
+
+        // Загрузочные задачи запускаются после первой композиции,
+        // поэтому стартовый UI отрисовывается без ожидания сети.
+        LaunchedEffect(Unit) {
+            runRefreshLoop(
+                onProgressChanged = { refreshProgress = it },
+                onRefresh = {
+                    refreshData(
+                        onFilesLoadingChanged = { isLoading = it },
+                        onFilesLoaded = { files = it },
+                        onFilesErrorChanged = { errorMessage = it },
+                        onBackendStatusChanged = { backendStatus = it },
+                        onBackendErrorChanged = { backendErrorMessage = it },
+                    )
+                },
+            )
+        }
+    }
+}
+
+private fun List<PricesFile>.replacingFile(file: PricesFile): List<PricesFile> =
+    listOf(file) + filterNot { it.name == file.name }
+
+private suspend fun loadFiles(
+    onLoadingChanged: (Boolean) -> Unit,
+    onFilesLoaded: (List<PricesFile>) -> Unit,
+    onErrorChanged: (String?) -> Unit,
+) {
+    onLoadingChanged(true)
+    onErrorChanged(null)
+    try {
+        onFilesLoaded(fetchFiles())
+    } catch (_: Throwable) {
+        onErrorChanged("Не удалось загрузить список файлов")
+    } finally {
+        onLoadingChanged(false)
+    }
+}
+
+private suspend fun loadBackendStatus(
+    onStatusChanged: (BackendStatus) -> Unit,
+    onErrorChanged: (String?) -> Unit,
+) {
+    onErrorChanged(null)
+    try {
+        onStatusChanged(fetchBackendStatus())
+    } catch (error: Throwable) {
+        onStatusChanged(BackendStatus(BackendPowerStatus.Unknown))
+        onErrorChanged("Не удалось получить статус бэка:\n${error.message}")
+    }
+}
+
+private suspend fun refreshData(
+    onFilesLoadingChanged: (Boolean) -> Unit,
+    onFilesLoaded: (List<PricesFile>) -> Unit,
+    onFilesErrorChanged: (String?) -> Unit,
+    onBackendStatusChanged: (BackendStatus) -> Unit,
+    onBackendErrorChanged: (String?) -> Unit,
+) = coroutineScope {
+    launch {
+        loadBackendStatus(
+            onStatusChanged = onBackendStatusChanged,
+            onErrorChanged = onBackendErrorChanged,
+        )
+    }
+    launch {
+        loadFiles(
+            onLoadingChanged = onFilesLoadingChanged,
+            onFilesLoaded = onFilesLoaded,
+            onErrorChanged = onFilesErrorChanged,
+        )
+    }
+}
+
+private suspend fun runRefreshLoop(
+    onProgressChanged: (Float) -> Unit,
+    onRefresh: suspend () -> Unit,
+) {
+    onRefresh()
+    while (true) {
+        repeat(REFRESH_INTERVAL_SECONDS) { second ->
+            onProgressChanged(second.toFloat() / REFRESH_INTERVAL_SECONDS)
+            delay(1_000)
+        }
+        onProgressChanged(1f)
+        onRefresh()
+        onProgressChanged(0f)
+    }
+}
+
+private fun changeBackendPower(
+    scope: CoroutineScope,
+    enabled: Boolean,
+    onActionRunningChanged: (Boolean) -> Unit,
+    onErrorChanged: (String?) -> Unit,
+    onStatusChanged: (BackendStatus) -> Unit,
+) {
+    scope.launchSafely(
+        onError = {
+            onErrorChanged(
+                if (enabled) "Не удалось включить бэк" else "Не удалось выключить бэк",
+            )
+            onActionRunningChanged(false)
+        },
+    ) {
+        onActionRunningChanged(true)
+        onErrorChanged(null)
+        onStatusChanged(
+            BackendStatus(
+                if (enabled) BackendPowerStatus.Starting else BackendPowerStatus.Stopping,
+            ),
+        )
+        onStatusChanged(if (enabled) startBackend() else stopBackend())
+        onActionRunningChanged(false)
     }
 }
 
@@ -306,18 +371,6 @@ private fun startUpload(
     onUploaded: () -> Unit,
     onError: () -> Unit,
 ) {
-    fun uploadFileState(
-        fileName: String,
-        uploadProgress: Int? = null,
-        uploadFailed: Boolean = false,
-    ) = PricesFile(
-        name = fileName,
-        csvName = fileName.substringBeforeLast('.') + ".csv",
-        hasCsv = false,
-        uploadProgress = uploadProgress,
-        uploadFailed = uploadFailed,
-    )
-
     pickAndUploadFile(
         scope = scope,
         onUploadingChanged = onUploadingChanged,
@@ -338,6 +391,18 @@ private fun startUpload(
         },
     )
 }
+
+private fun uploadFileState(
+    fileName: String,
+    uploadProgress: Int? = null,
+    uploadFailed: Boolean = false,
+) = PricesFile(
+    name = fileName,
+    csvName = fileName.substringBeforeLast('.') + ".csv",
+    hasCsv = false,
+    uploadProgress = uploadProgress,
+    uploadFailed = uploadFailed,
+)
 
 @Composable
 private fun UploadButton(
