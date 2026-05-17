@@ -12,21 +12,14 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import kotlinx.serialization.json.Json
-import kotlinx.serialization.json.contentOrNull
-import kotlinx.serialization.json.jsonObject
-import kotlinx.serialization.json.jsonPrimitive
 import java.awt.Desktop
 import java.awt.FileDialog
 import java.awt.Frame
 import java.io.File
-import java.net.URI
-import java.net.http.HttpClient
-import java.net.http.HttpRequest
-import java.net.http.HttpResponse
 
 private val filesDirectory = File("files")
-private val httpClient = HttpClient.newHttpClient()
+
+internal actual val backendControlApiBaseUrl: String = ""
 
 internal actual suspend fun fetchFiles(): List<PricesFile> = withContext(Dispatchers.IO) {
     filesDirectory.mkdirs()
@@ -54,37 +47,15 @@ internal actual fun loadBackendInstanceId(): String = loadYandexEnvironment().in
 internal actual fun loadYandexIamToken(): String = loadYandexEnvironment().iamToken
 
 internal actual suspend fun fetchBackendStatus(): BackendStatus = withContext(Dispatchers.IO) {
-    val environment = loadYandexEnvironment()
-    val response = sendYandexRequest(
-        uri = "$BACKEND_STATUS_API_BASE_URL$BACKEND_INSTANCE_API_PATH/${environment.instanceId}",
-        environment = environment,
-    )
-    val yandexStatus = Json.parseToJsonElement(response.body())
-        .jsonObject["status"]
-        ?.jsonPrimitive
-        ?.contentOrNull
-        .orEmpty()
-    BackendStatus(yandexStatusToBackendPowerStatus(yandexStatus))
+    fetchBackendStatusViaYandexApi()
 }
 
 internal actual suspend fun startBackend(): BackendStatus = withContext(Dispatchers.IO) {
-    val environment = loadYandexEnvironment()
-    sendYandexRequest(
-        uri = "$BACKEND_STATUS_API_BASE_URL$BACKEND_INSTANCE_API_PATH/${environment.instanceId}$BACKEND_START_ACTION",
-        method = "POST",
-        environment = environment,
-    )
-    BackendStatus(BackendPowerStatus.Starting)
+    startBackendViaYandexApi()
 }
 
 internal actual suspend fun stopBackend(): BackendStatus = withContext(Dispatchers.IO) {
-    val environment = loadYandexEnvironment()
-    sendYandexRequest(
-        uri = "$BACKEND_STATUS_API_BASE_URL$BACKEND_INSTANCE_API_PATH/${environment.instanceId}$BACKEND_STOP_ACTION",
-        method = "POST",
-        environment = environment,
-    )
-    BackendStatus(BackendPowerStatus.Stopping)
+    stopBackendViaYandexApi()
 }
 
 @Composable
@@ -132,21 +103,6 @@ internal actual fun pickAndUploadFile(
         }
         onUploaded(fileName)
     }
-}
-
-private fun sendYandexRequest(
-    uri: String,
-    method: String = "GET",
-    environment: YandexEnvironment,
-): HttpResponse<String> {
-    val request = HttpRequest.newBuilder()
-        .uri(URI.create(uri))
-        .header("Authorization", "Bearer ${environment.iamToken}")
-        .method(method, HttpRequest.BodyPublishers.noBody())
-        .build()
-    val response = httpClient.send(request, HttpResponse.BodyHandlers.ofString())
-    if (response.statusCode() !in 200..299) error("Yandex Compute API request failed")
-    return response
 }
 
 private fun openCsvFile(fileName: String) {

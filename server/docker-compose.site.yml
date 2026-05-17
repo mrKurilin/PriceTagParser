@@ -8,6 +8,7 @@ services:
     env_file:
       - .env
     environment:
+      - APP_ROLE=site
       - SERVER_PORT=8080
       - WEB_DIR=/app/web
     restart: always

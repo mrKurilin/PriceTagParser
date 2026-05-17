@@ -8,6 +8,7 @@ services:
     env_file:
       - .env
     environment:
+      - APP_ROLE=api
       - SERVER_PORT=8080
       - PRICE_TAG_PARSER_SCRIPT=/app/generate_csv.sh
       - NVIDIA_VISIBLE_DEVICES=all
