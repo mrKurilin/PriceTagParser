@@ -77,7 +77,6 @@
 
 - **Docker**
 - **Docker Compose**
-- **NVIDIA Container Toolkit** на сервере обработки, если обработка должна использовать GPU
 
 Проект подготовлен для запуска на двух отдельных серверах:
 
@@ -125,8 +124,6 @@ docker-compose -f docker-compose.api.yml down
 ```text
 http://<api-server-host>:8080/api/files
 ```
-
-В `docker-compose.api.yml` включён доступ контейнера к GPU через `runtime: nvidia`, чтобы конфигурация работала со старым `docker-compose` v1. На сервере должен быть установлен и настроен NVIDIA Container Toolkit.
 
 ### Запуск сервера сайта
 
@@ -196,8 +193,6 @@ http://localhost:8081
 - **`API_HOST_PORT=8080`** — порт REST API на хосте;
 - **`SERVER_PORT=8080`** — порт Ktor REST API внутри контейнера;
 - **`PRICE_TAG_PARSER_SCRIPT=/app/generate_csv.sh`** — путь к скрипту генерации CSV внутри контейнера;
-- **`NVIDIA_VISIBLE_DEVICES=all`** — доступные GPU;
-- **`NVIDIA_DRIVER_CAPABILITIES=compute,utility`** — возможности NVIDIA runtime для обработки.
 
 В `server/docker-compose.site.yml` используется:
 
