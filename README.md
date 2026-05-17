@@ -108,10 +108,10 @@ YANDEX_INSTANCE_ID=<instance-id>
 
 ```shell
 # Собрать и запустить REST API
-API_HOST_PORT=8080 docker-compose -f docker-compose.api.yml up --build
+docker-compose -f docker-compose.api.yml up --build
 
 # Или запустить REST API в фоне
-API_HOST_PORT=8080 docker-compose -f docker-compose.api.yml up --build -d
+docker-compose -f docker-compose.api.yml up --build -d
 
 # Проверить, что переменные попали в контейнер
 docker-compose -f docker-compose.api.yml exec api printenv | grep YANDEX
@@ -136,10 +136,10 @@ http://<api-server-host>:8080/api/files
 cd server
 
 # Собрать и запустить сайт
-SITE_HOST_PORT=8081 docker-compose -f docker-compose.site.yml up --build
+docker-compose -f docker-compose.site.yml up --build
 
 # Или запустить сайт в фоне
-SITE_HOST_PORT=8081 docker-compose -f docker-compose.site.yml up --build -d
+docker-compose -f docker-compose.site.yml up --build -d
 
 # Проверить состояние контейнера и логи
 docker-compose -f docker-compose.site.yml ps
