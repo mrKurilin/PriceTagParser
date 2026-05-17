@@ -42,8 +42,6 @@ import java.net.http.HttpResponse
 
 private const val MAX_UPLOAD_SIZE_BYTES = 500L * 1024L * 1024L
 private const val MAX_MULTIPART_OVERHEAD_BYTES = 2L * 1024L * 1024L
-private const val YANDEX_COMPUTE_API_BASE_URL = "https://compute.api.cloud.yandex.net/compute/v1"
-
 private val filesDirectory = File("files")
 private val webDirectory = File(System.getenv("WEB_DIR") ?: "web")
 private val processingScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
@@ -228,50 +226,46 @@ fun Application.module() {
 
 private class YandexBackendManager(
     private val httpClient: HttpClient = HttpClient.newHttpClient(),
-    private val iamToken: String = System.getenv("YANDEX_IAM_TOKEN").orEmpty(),
-    private val folderId: String = System.getenv("YANDEX_FOLDER_ID").orEmpty(),
-    private val instanceId: String = System.getenv("YANDEX_INSTANCE_ID").orEmpty(),
+    private val environmentProvider: () -> YandexEnvironment = ::loadYandexEnvironment,
 ) {
     fun statusJson(): String {
-        ensureConfigured()
+        val environment = environmentProvider()
         val request = authorizedRequest(
-            uri = "$YANDEX_COMPUTE_API_BASE_URL/instances?folderId=$folderId",
+            uri = "$YANDEX_COMPUTE_API_BASE_URL/instances?folderId=${environment.folderId}",
+            environment = environment,
         ).GET().build()
         val response = httpClient.send(request, HttpResponse.BodyHandlers.ofString())
         ensureSuccess(response)
-        return "{\"powerStatus\":\"${response.body().instancePowerStatus(instanceId)}\"}"
+        return "{\"powerStatus\":\"${response.body().instancePowerStatus(environment.instanceId)}\"}"
     }
 
     fun startJson(): String {
-        ensureConfigured()
         performAction("start")
         return "{\"powerStatus\":\"Starting\"}"
     }
 
     fun stopJson(): String {
-        ensureConfigured()
         performAction("stop")
         return "{\"powerStatus\":\"Stopping\"}"
     }
 
     private fun performAction(action: String) {
+        val environment = environmentProvider()
         val request = authorizedRequest(
-            uri = "$YANDEX_COMPUTE_API_BASE_URL/instances/$instanceId:$action",
+            uri = "$YANDEX_COMPUTE_API_BASE_URL/instances/${environment.instanceId}:$action",
+            environment = environment,
         ).POST(HttpRequest.BodyPublishers.noBody()).build()
         val response = httpClient.send(request, HttpResponse.BodyHandlers.ofString())
         ensureSuccess(response)
     }
 
-    private fun authorizedRequest(uri: String): HttpRequest.Builder = HttpRequest.newBuilder()
+    private fun authorizedRequest(
+        uri: String,
+        environment: YandexEnvironment,
+    ): HttpRequest.Builder = HttpRequest.newBuilder()
         .uri(URI.create(uri))
-        .header(HttpHeaders.Authorization, "Bearer $iamToken")
+        .header(HttpHeaders.Authorization, "Bearer ${environment.iamToken}")
         .header(HttpHeaders.Accept, ContentType.Application.Json.toString())
-
-    private fun ensureConfigured() {
-        check(iamToken.isNotBlank()) { "YANDEX_IAM_TOKEN is not configured" }
-        check(folderId.isNotBlank()) { "YANDEX_FOLDER_ID is not configured" }
-        check(instanceId.isNotBlank()) { "YANDEX_INSTANCE_ID is not configured" }
-    }
 
     private fun ensureSuccess(response: HttpResponse<String>) {
         check(response.statusCode() in 200..299) {

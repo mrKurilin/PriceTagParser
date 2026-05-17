@@ -5,10 +5,9 @@ services:
       dockerfile: server/Dockerfile.web
     ports:
       - "${SITE_HOST_PORT:-8081}:8080"
+    env_file:
+      - .env
     environment:
       - SERVER_PORT=8080
       - WEB_DIR=/app/web
-      - YANDEX_IAM_TOKEN=${YANDEX_IAM_TOKEN:-}
-      - YANDEX_FOLDER_ID=${YANDEX_FOLDER_ID:-}
-      - YANDEX_INSTANCE_ID=${YANDEX_INSTANCE_ID:-}
     restart: always

@@ -26,8 +26,6 @@ import java.net.http.HttpClient
 import java.net.http.HttpRequest
 import java.net.http.HttpResponse
 
-private const val YANDEX_COMPUTE_API_BASE_URL = "https://compute.api.cloud.yandex.net/compute/v1"
-
 private val filesDirectory = File("files")
 private val httpClient = HttpClient.newHttpClient()
 
@@ -53,28 +51,30 @@ internal actual suspend fun fetchFiles(): List<PricesFile> = withContext(Dispatc
 }
 
 internal actual suspend fun fetchBackendStatus(): BackendStatus = withContext(Dispatchers.IO) {
-    val instanceId = yandexEnv("YANDEX_INSTANCE_ID")
-    val folderId = yandexEnv("YANDEX_FOLDER_ID")
+    val environment = loadYandexEnvironment()
     val response = sendYandexRequest(
-        uri = "$YANDEX_COMPUTE_API_BASE_URL/instances?folderId=$folderId",
+        uri = "$YANDEX_COMPUTE_API_BASE_URL/instances?folderId=${environment.folderId}",
+        environment = environment,
     )
-    BackendStatus(response.body().instancePowerStatus(instanceId))
+    BackendStatus(response.body().instancePowerStatus(environment.instanceId))
 }
 
 internal actual suspend fun startBackend(): BackendStatus = withContext(Dispatchers.IO) {
-    val instanceId = yandexEnv("YANDEX_INSTANCE_ID")
+    val environment = loadYandexEnvironment()
     sendYandexRequest(
-        uri = "$YANDEX_COMPUTE_API_BASE_URL/instances/$instanceId:start",
+        uri = "$YANDEX_COMPUTE_API_BASE_URL/instances/${environment.instanceId}:start",
         method = "POST",
+        environment = environment,
     )
     BackendStatus(BackendPowerStatus.Starting)
 }
 
 internal actual suspend fun stopBackend(): BackendStatus = withContext(Dispatchers.IO) {
-    val instanceId = yandexEnv("YANDEX_INSTANCE_ID")
+    val environment = loadYandexEnvironment()
     sendYandexRequest(
-        uri = "$YANDEX_COMPUTE_API_BASE_URL/instances/$instanceId:stop",
+        uri = "$YANDEX_COMPUTE_API_BASE_URL/instances/${environment.instanceId}:stop",
         method = "POST",
+        environment = environment,
     )
     BackendStatus(BackendPowerStatus.Stopping)
 }
@@ -126,19 +126,20 @@ internal actual fun pickAndUploadFile(
     }
 }
 
-private fun sendYandexRequest(uri: String, method: String = "GET"): HttpResponse<String> {
+private fun sendYandexRequest(
+    uri: String,
+    method: String = "GET",
+    environment: YandexEnvironment,
+): HttpResponse<String> {
     val request = HttpRequest.newBuilder()
         .uri(URI.create(uri))
-        .header("Authorization", "Bearer ${yandexEnv("YANDEX_IAM_TOKEN")}")
+        .header("Authorization", "Bearer ${environment.iamToken}")
         .method(method, HttpRequest.BodyPublishers.noBody())
         .build()
     val response = httpClient.send(request, HttpResponse.BodyHandlers.ofString())
     if (response.statusCode() !in 200..299) error("Yandex Compute API request failed")
     return response
 }
-
-private fun yandexEnv(name: String): String =
-    checkNotNull(System.getenv(name)?.takeIf { it.isNotBlank() }) { "$name is not configured" }
 
 private fun String.instancePowerStatus(instanceId: String): BackendPowerStatus {
     val yandexStatus = Json.parseToJsonElement(this)
