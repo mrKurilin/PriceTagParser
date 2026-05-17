@@ -1,5 +1,3 @@
-# syntax=docker/dockerfile:1.7
-
 FROM gradle:8.14.3-jdk21 AS build
 WORKDIR /workspace
 
@@ -9,22 +7,14 @@ COPY --chown=gradle:gradle composeApp/build.gradle.kts ./composeApp/build.gradle
 COPY --chown=gradle:gradle server/build.gradle.kts ./server/build.gradle.kts
 COPY --chown=gradle:gradle shared/build.gradle.kts ./shared/build.gradle.kts
 
-RUN --mount=type=cache,target=/home/gradle/.gradle,sharing=locked \
-    --mount=type=cache,target=/workspace/.gradle,sharing=locked \
-    --mount=type=cache,target=/home/gradle/.konan,sharing=locked \
-    --mount=type=cache,target=/home/gradle/.cache,sharing=locked \
-    ./gradlew :server:buildFatJar :composeApp:composeCompatibilityBrowserDistribution --no-daemon --parallel --dry-run
+RUN ./gradlew :server:buildFatJar :composeApp:composeCompatibilityBrowserDistribution --no-daemon --parallel --dry-run
 
 COPY --chown=gradle:gradle composeApp/src ./composeApp/src
 COPY --chown=gradle:gradle server/src ./server/src
 COPY --chown=gradle:gradle shared/src ./shared/src
 COPY --chown=gradle:gradle generate_csv.sh ./generate_csv.sh
 
-RUN --mount=type=cache,target=/home/gradle/.gradle,sharing=locked \
-    --mount=type=cache,target=/workspace/.gradle,sharing=locked \
-    --mount=type=cache,target=/home/gradle/.konan,sharing=locked \
-    --mount=type=cache,target=/home/gradle/.cache,sharing=locked \
-    ./gradlew :server:buildFatJar :composeApp:composeCompatibilityBrowserDistribution --no-daemon --parallel
+RUN ./gradlew :server:buildFatJar :composeApp:composeCompatibilityBrowserDistribution --no-daemon --parallel
 
 FROM eclipse-temurin:21-jre
 EXPOSE 8080
