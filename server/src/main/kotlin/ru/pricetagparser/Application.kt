@@ -28,26 +28,16 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import kotlinx.serialization.json.Json
-import kotlinx.serialization.json.contentOrNull
-import kotlinx.serialization.json.jsonObject
-import kotlinx.serialization.json.jsonPrimitive
 import java.io.File
 import java.io.OutputStream
-import java.net.URI
-import java.net.http.HttpClient
-import java.net.http.HttpRequest
-import java.net.http.HttpResponse
 
 private const val MAX_UPLOAD_SIZE_BYTES = 500L * 1024L * 1024L
 private const val MAX_MULTIPART_OVERHEAD_BYTES = 2L * 1024L * 1024L
-private const val APP_ROLE_SITE = "site"
 private const val APP_ROLE_API = "api"
 private val appRole = System.getenv("APP_ROLE") ?: APP_ROLE_API
 private val filesDirectory = File("files")
 private val webDirectory = File(System.getenv("WEB_DIR") ?: "web")
 private val processingScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
-private val backendManager = YandexBackendManager()
 
 fun main() {
     val serverPort = System.getenv("SERVER_PORT")?.toIntOrNull() ?: SERVER_PORT
@@ -75,60 +65,6 @@ fun Application.module() {
             } else {
                 println("[Server] GET /: index.html not found, respond greeting")
                 call.respondText("Ktor: ${Greeting().greet()}")
-            }
-        }
-
-        get(BACKEND_STATUS_API_PATH) {
-            if (!appRole.isSiteRole()) {
-                call.respond(HttpStatusCode.NotFound)
-                return@get
-            }
-            try {
-                val statusJson = backendManager.statusJson()
-                println("[Server] GET $BACKEND_STATUS_API_PATH: respond $statusJson")
-                call.respondText(
-                    text = statusJson,
-                    contentType = ContentType.Application.Json,
-                )
-            } catch (throwable: Throwable) {
-                println("[Server] GET $BACKEND_STATUS_API_PATH: failed ${throwable.message}")
-                call.respond(HttpStatusCode.BadGateway)
-            }
-        }
-
-        post(BACKEND_START_API_PATH) {
-            if (!appRole.isSiteRole()) {
-                call.respond(HttpStatusCode.NotFound)
-                return@post
-            }
-            try {
-                val statusJson = backendManager.startJson()
-                println("[Server] POST $BACKEND_START_API_PATH: respond $statusJson")
-                call.respondText(
-                    text = statusJson,
-                    contentType = ContentType.Application.Json,
-                )
-            } catch (throwable: Throwable) {
-                println("[Server] POST $BACKEND_START_API_PATH: failed ${throwable.message}")
-                call.respond(HttpStatusCode.BadGateway)
-            }
-        }
-
-        post(BACKEND_STOP_API_PATH) {
-            if (!appRole.isSiteRole()) {
-                call.respond(HttpStatusCode.NotFound)
-                return@post
-            }
-            try {
-                val statusJson = backendManager.stopJson()
-                println("[Server] POST $BACKEND_STOP_API_PATH: respond $statusJson")
-                call.respondText(
-                    text = statusJson,
-                    contentType = ContentType.Application.Json,
-                )
-            } catch (throwable: Throwable) {
-                println("[Server] POST $BACKEND_STOP_API_PATH: failed ${throwable.message}")
-                call.respond(HttpStatusCode.BadGateway)
             }
         }
 
@@ -238,56 +174,6 @@ fun Application.module() {
     }
 }
 
-private class YandexBackendManager(
-    private val httpClient: HttpClient = HttpClient.newHttpClient(),
-    private val environmentProvider: () -> YandexEnvironment = ::loadYandexEnvironment,
-) {
-    fun statusJson(): String {
-        val environment = environmentProvider()
-        val request = authorizedRequest(
-            uri = "$BACKEND_STATUS_API_BASE_URL$BACKEND_INSTANCE_API_PATH/${environment.instanceId}",
-            environment = environment,
-        ).GET().build()
-        val response = httpClient.send(request, HttpResponse.BodyHandlers.ofString())
-        ensureSuccess(response)
-        return response.body().backendStatusJson()
-    }
-
-    fun startJson(): String {
-        performAction(BACKEND_START_ACTION)
-        return BackendPowerStatus.Starting.toStatusJson()
-    }
-
-    fun stopJson(): String {
-        performAction(BACKEND_STOP_ACTION)
-        return BackendPowerStatus.Stopping.toStatusJson()
-    }
-
-    private fun performAction(action: String) {
-        val environment = environmentProvider()
-        val request = authorizedRequest(
-            uri = "$BACKEND_STATUS_API_BASE_URL$BACKEND_INSTANCE_API_PATH/${environment.instanceId}$action",
-            environment = environment,
-        ).POST(HttpRequest.BodyPublishers.noBody()).build()
-        val response = httpClient.send(request, HttpResponse.BodyHandlers.ofString())
-        ensureSuccess(response)
-    }
-
-    private fun authorizedRequest(
-        uri: String,
-        environment: YandexEnvironment,
-    ): HttpRequest.Builder = HttpRequest.newBuilder()
-        .uri(URI.create(uri))
-        .header(HttpHeaders.Authorization, "Bearer ${environment.iamToken}")
-        .header(HttpHeaders.Accept, ContentType.Application.Json.toString())
-
-    private fun ensureSuccess(response: HttpResponse<String>) {
-        check(response.statusCode() in 200..299) {
-            "Yandex Compute API failed with status ${response.statusCode()}"
-        }
-    }
-}
-
 private class UploadTooLargeException : RuntimeException()
 
 private suspend fun ByteReadChannel.copyToWithLimit(
@@ -306,21 +192,6 @@ private suspend fun ByteReadChannel.copyToWithLimit(
         }
     }
 }
-
-private fun String.isSiteRole(): Boolean =
-    equals(APP_ROLE_SITE, ignoreCase = true)
-
-private fun String.backendStatusJson(): String {
-    val yandexStatus = Json.parseToJsonElement(this)
-        .jsonObject["status"]
-        ?.jsonPrimitive
-        ?.contentOrNull
-        .orEmpty()
-    return yandexStatusToBackendPowerStatus(yandexStatus).toStatusJson()
-}
-
-private fun BackendPowerStatus.toStatusJson(): String =
-    "{\"powerStatus\":\"$name\"}"
 
 private fun File.uploadedFilesCount(): Int =
     listFiles()
