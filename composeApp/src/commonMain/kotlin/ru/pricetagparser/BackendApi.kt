@@ -3,6 +3,8 @@ package ru.pricetagparser
 import io.ktor.client.HttpClient
 import io.ktor.client.call.body
 import io.ktor.client.plugins.contentnegotiation.ContentNegotiation
+import io.ktor.client.plugins.logging.LogLevel
+import io.ktor.client.plugins.logging.Logging
 import io.ktor.client.request.get
 import io.ktor.client.request.post
 import io.ktor.serialization.kotlinx.json.json
@@ -16,6 +18,10 @@ private val apiHttpClient = HttpClient {
                 ignoreUnknownKeys = true
             },
         )
+    }
+
+    install(Logging) {
+        level = LogLevel.BODY
     }
 }
 
@@ -31,8 +37,8 @@ private data class BackendStatusResponse(
     val powerStatus: String,
 )
 
-internal suspend fun fetchBackendFiles(baseUrl: String): List<PricesFile> = apiHttpClient
-    .get("$baseUrl/api/files")
+internal suspend fun fetchBackendFiles(): List<PricesFile> = apiHttpClient
+    .get("$FILE_PROCESSING_API_BASE_URL$FILES_API_PATH")
     .body<List<PriceFileResponse>>()
     .map { file ->
         PricesFile(
@@ -42,18 +48,18 @@ internal suspend fun fetchBackendFiles(baseUrl: String): List<PricesFile> = apiH
         )
     }
 
-internal suspend fun fetchBackendPowerStatus(baseUrl: String): BackendStatus = apiHttpClient
-    .get("$baseUrl/api/backend/status")
+internal suspend fun fetchBackendStatusViaApi(): BackendStatus = apiHttpClient
+    .get("$BACKEND_STATUS_API_BASE_URL$BACKEND_STATUS_API_PATH")
     .body<BackendStatusResponse>()
     .toBackendStatus()
 
-internal suspend fun startBackendProcessing(baseUrl: String): BackendStatus = apiHttpClient
-    .post("$baseUrl/api/backend/start")
+internal suspend fun startBackendViaApi(): BackendStatus = apiHttpClient
+    .post("$BACKEND_STATUS_API_BASE_URL$BACKEND_START_API_PATH")
     .body<BackendStatusResponse>()
     .toBackendStatus()
 
-internal suspend fun stopBackendProcessing(baseUrl: String): BackendStatus = apiHttpClient
-    .post("$baseUrl/api/backend/stop")
+internal suspend fun stopBackendViaApi(): BackendStatus = apiHttpClient
+    .post("$BACKEND_STATUS_API_BASE_URL$BACKEND_STOP_API_PATH")
     .body<BackendStatusResponse>()
     .toBackendStatus()
 

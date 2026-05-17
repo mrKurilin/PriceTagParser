@@ -1,7 +1,5 @@
 package ru.pricetagparser
 
-const val YANDEX_COMPUTE_API_BASE_URL = "https://compute.api.cloud.yandex.net/compute/v1"
-
 private const val YANDEX_IAM_TOKEN_ENV = "YANDEX_IAM_TOKEN"
 private const val YANDEX_FOLDER_ID_ENV = "YANDEX_FOLDER_ID"
 private const val YANDEX_INSTANCE_ID_ENV = "YANDEX_INSTANCE_ID"

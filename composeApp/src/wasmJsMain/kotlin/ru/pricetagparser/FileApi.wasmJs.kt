@@ -15,13 +15,13 @@ import org.w3c.xhr.XMLHttpRequest
 import kotlin.coroutines.resume
 import kotlin.js.ExperimentalWasmJsInterop
 
-internal actual suspend fun fetchFiles(): List<PricesFile> = fetchBackendFiles(apiBaseUrl())
+internal actual suspend fun fetchFiles(): List<PricesFile> = fetchBackendFiles()
 
-internal actual suspend fun fetchBackendStatus(): BackendStatus = fetchBackendPowerStatus(apiBaseUrl())
+internal actual suspend fun fetchBackendStatus(): BackendStatus = fetchBackendStatusViaApi()
 
-internal actual suspend fun startBackend(): BackendStatus = startBackendProcessing(apiBaseUrl())
+internal actual suspend fun startBackend(): BackendStatus = startBackendViaApi()
 
-internal actual suspend fun stopBackend(): BackendStatus = stopBackendProcessing(apiBaseUrl())
+internal actual suspend fun stopBackend(): BackendStatus = stopBackendViaApi()
 
 @Composable
 internal actual fun CompletedFileActions(file: PricesFile) {
@@ -31,7 +31,7 @@ internal actual fun CompletedFileActions(file: PricesFile) {
 }
 
 internal actual fun downloadCsv(fileName: String) {
-    val url = "${apiBaseUrl()}/api/files/$fileName/download"
+    val url = "$FILE_PROCESSING_API_BASE_URL$FILES_API_PATH/$fileName/download"
     println("[FileApi] downloadCsv: fileName=$fileName, url=$url")
     window.location.href = url
 }
@@ -59,7 +59,7 @@ internal actual fun pickAndUploadFile(
                 onUploadingChanged(true)
                 onUploadStarted(file.name)
                 try {
-                    val url = "${apiBaseUrl()}/api/upload"
+                    val url = "$FILE_PROCESSING_API_BASE_URL$FILE_UPLOAD_API_PATH"
                     println("[FileApi] upload: xhr start url=$url, origin=${window.location.origin}")
                     uploadFile(
                         url = url,
@@ -125,6 +125,3 @@ private suspend fun uploadFile(
     }
 }
 
-private fun apiBaseUrl(): String = window.location.origin.takeIf { origin ->
-    window.location.port == SERVER_PORT.toString() || origin.isBlank()
-} ?: "${window.location.protocol}//${window.location.hostname}:$SERVER_PORT"

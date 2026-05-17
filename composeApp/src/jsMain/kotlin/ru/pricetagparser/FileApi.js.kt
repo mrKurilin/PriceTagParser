@@ -14,13 +14,13 @@ import org.w3c.xhr.FormData
 import org.w3c.xhr.XMLHttpRequest
 import kotlin.coroutines.resume
 
-internal actual suspend fun fetchFiles(): List<PricesFile> = fetchBackendFiles(apiBaseUrl())
+internal actual suspend fun fetchFiles(): List<PricesFile> = fetchBackendFiles()
 
-internal actual suspend fun fetchBackendStatus(): BackendStatus = fetchBackendPowerStatus(apiBaseUrl())
+internal actual suspend fun fetchBackendStatus(): BackendStatus = fetchBackendStatusViaApi()
 
-internal actual suspend fun startBackend(): BackendStatus = startBackendProcessing(apiBaseUrl())
+internal actual suspend fun startBackend(): BackendStatus = startBackendViaApi()
 
-internal actual suspend fun stopBackend(): BackendStatus = stopBackendProcessing(apiBaseUrl())
+internal actual suspend fun stopBackend(): BackendStatus = stopBackendViaApi()
 
 @Composable
 internal actual fun CompletedFileActions(file: PricesFile) {
@@ -30,7 +30,7 @@ internal actual fun CompletedFileActions(file: PricesFile) {
 }
 
 internal actual fun downloadCsv(fileName: String) {
-    window.location.href = "${apiBaseUrl()}/api/files/$fileName/download"
+    window.location.href = "$FILE_PROCESSING_API_BASE_URL$FILES_API_PATH/$fileName/download"
 }
 
 internal actual fun pickAndUploadFile(
@@ -54,7 +54,7 @@ internal actual fun pickAndUploadFile(
             ) {
                 onUploadStarted(file.name)
                 uploadFile(
-                    url = "${apiBaseUrl()}/api/upload",
+                    url = "$FILE_PROCESSING_API_BASE_URL$FILE_UPLOAD_API_PATH",
                     file = file,
                     onProgress = { progress -> onUploadProgress(file.name, progress) },
                 )
@@ -104,10 +104,6 @@ private suspend fun uploadFile(
         request.send(formData)
     }
 }
-
-private fun apiBaseUrl(): String = window.location.origin.takeIf { origin ->
-    window.location.port == SERVER_PORT.toString() || origin.isBlank()
-} ?: "${window.location.protocol}//${window.location.hostname}:$SERVER_PORT"
 
 private fun CoroutineScope.launchSafely(
     fileName: String,
