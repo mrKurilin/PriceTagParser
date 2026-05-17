@@ -40,6 +40,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
@@ -92,6 +93,11 @@ fun App() {
             }
         }
 
+        suspend fun refreshData() = coroutineScope {
+            launch { loadBackendStatus() }
+            launch { loadFiles() }
+        }
+
         fun setBackendEnabled(enabled: Boolean) {
             scope.launchSafely(
                 onError = {
@@ -114,16 +120,14 @@ fun App() {
         }
 
         LaunchedEffect(Unit) {
-            loadBackendStatus()
-            loadFiles()
+            refreshData()
             while (true) {
                 repeat(REFRESH_INTERVAL_SECONDS) { second ->
                     refreshProgress = second.toFloat() / REFRESH_INTERVAL_SECONDS
                     delay(1_000)
                 }
                 refreshProgress = 1f
-                loadBackendStatus()
-                loadFiles()
+                refreshData()
                 refreshProgress = 0f
             }
         }

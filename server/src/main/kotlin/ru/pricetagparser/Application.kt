@@ -79,10 +79,6 @@ fun Application.module() {
         }
 
         get(BACKEND_STATUS_API_PATH) {
-            if (!appRole.isSiteRole()) {
-                call.respond(HttpStatusCode.NotFound)
-                return@get
-            }
             try {
                 val statusJson = backendManager.statusJson()
                 println("[Server] GET $BACKEND_STATUS_API_PATH: respond $statusJson")

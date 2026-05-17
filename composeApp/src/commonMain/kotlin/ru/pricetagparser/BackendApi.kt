@@ -2,6 +2,7 @@ package ru.pricetagparser
 
 import io.ktor.client.HttpClient
 import io.ktor.client.call.body
+import io.ktor.client.plugins.HttpTimeout
 import io.ktor.client.plugins.contentnegotiation.ContentNegotiation
 import io.ktor.client.plugins.logging.LogLevel
 import io.ktor.client.plugins.logging.Logging
@@ -20,7 +21,15 @@ internal expect fun loadBackendInstanceId(): String
 
 internal expect fun loadYandexIamToken(): String
 
+private const val API_REQUEST_TIMEOUT_MILLIS = 15_000L
+
 private val apiHttpClient = HttpClient {
+    install(HttpTimeout) {
+        requestTimeoutMillis = API_REQUEST_TIMEOUT_MILLIS
+        connectTimeoutMillis = API_REQUEST_TIMEOUT_MILLIS
+        socketTimeoutMillis = API_REQUEST_TIMEOUT_MILLIS
+    }
+
     install(ContentNegotiation) {
         json(
             Json {
