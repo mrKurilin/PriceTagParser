@@ -142,11 +142,11 @@ SITE_HOST_PORT=8081 docker-compose -f docker-compose.site.yml up --build
 SITE_HOST_PORT=8081 docker-compose -f docker-compose.site.yml up --build -d
 
 # Проверить состояние контейнера и логи
-docker compose -f docker-compose.site.yml ps
-docker compose -f docker-compose.site.yml logs site
+docker-compose -f docker-compose.site.yml ps
+docker-compose -f docker-compose.site.yml logs site
 
 # Остановить сайт
-docker compose -f docker-compose.site.yml down
+docker-compose -f docker-compose.site.yml down
 ```
 
 После старта сайт будет доступен по адресу:
