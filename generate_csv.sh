@@ -58,11 +58,8 @@ set -- \
     --video_path "$source_file" \
     --ckpt "$ckpt_file" \
     --csv_path "$output_file" \
+    --rotate \
     --use_byte
-
-if [ "${PRICE_TAG_RECOGNITION_ROTATE:-}" = "1" ]; then
-    set -- "$@" --rotate
-fi
 
 if [ -n "$visualization_file" ]; then
     set -- "$@" --out_path "$visualization_file"
