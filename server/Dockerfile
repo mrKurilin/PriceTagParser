@@ -20,11 +20,30 @@ COPY --chown=gradle:gradle generate_csv.sh ./generate_csv.sh
 RUN --mount=type=cache,id=pricetagparser-gradle-cache,target=/home/gradle/.gradle,uid=1000,gid=1000,sharing=locked \
     ./gradlew :server:buildFatJar :composeApp:composeCompatibilityBrowserDistribution --no-daemon --parallel
 
-FROM eclipse-temurin:21-jre
+FROM pytorch/pytorch:2.5.0-cuda12.4-cudnn9-devel
+
 EXPOSE 8080
 WORKDIR /app
+
+ENV DEBIAN_FRONTEND=noninteractive
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    openjdk-21-jre-headless \
+    libgl1 \
+    libglib2.0-0 \
+    libsm6 \
+    libxext6 \
+    libxrender1 \
+    git-lfs \
+    && rm -rf /var/lib/apt/lists/*
+
+COPY priceTagRecognition/requirements.txt /app/priceTagRecognition/requirements.txt
+RUN pip install --no-cache-dir -r /app/priceTagRecognition/requirements.txt
+
 COPY --from=build /workspace/server/build/libs/fat.jar /app/app.jar
 COPY --from=build /workspace/composeApp/build/dist/composeWebCompatibility/productionExecutable /app/web
 COPY --from=build /workspace/generate_csv.sh /app/generate_csv.sh
+COPY priceTagRecognition /app/priceTagRecognition
+
 RUN chmod +x /app/generate_csv.sh
 ENTRYPOINT ["java","-jar","/app/app.jar"]
