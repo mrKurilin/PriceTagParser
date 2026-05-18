@@ -8,7 +8,13 @@
     <link type="text/css" rel="stylesheet" href="styles.css">
 </head>
 <body>
-<div id="composeAppRoot" class="compose-root"></div>
+<div id="composeAppRoot" class="compose-root">
+    <div class="app-loader" aria-live="polite" aria-label="Загрузка приложения">
+        <div class="app-loader__spinner" aria-hidden="true"></div>
+        <div class="app-loader__title">PriceTagParser</div>
+        <div class="app-loader__subtitle">Загружаем приложение…</div>
+    </div>
+</div>
 <script type="application/javascript" src="composeApp.js" defer></script>
 </body>
 </html>

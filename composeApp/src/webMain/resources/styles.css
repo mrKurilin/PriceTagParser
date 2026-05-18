@@ -11,3 +11,40 @@ html, body {
     width: 100%;
     height: 100%;
 }
+
+.app-loader {
+    width: 100%;
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
+    color: #1f2937;
+    background: #ffffff;
+}
+
+.app-loader__spinner {
+    width: 44px;
+    height: 44px;
+    border: 4px solid #e5e7eb;
+    border-top-color: #2563eb;
+    border-radius: 50%;
+    animation: app-loader-spin 900ms linear infinite;
+}
+
+.app-loader__title {
+    font-size: 20px;
+    font-weight: 700;
+}
+
+.app-loader__subtitle {
+    font-size: 14px;
+    color: #6b7280;
+}
+
+@keyframes app-loader-spin {
+    to {
+        transform: rotate(360deg);
+    }
+}
