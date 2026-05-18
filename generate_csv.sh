@@ -26,11 +26,7 @@ python_bin=${PRICE_TAG_RECOGNITION_PYTHON:-python3}
 ckpt_file=${PRICE_TAG_RECOGNITION_CKPT:-}
 
 if [ -z "$ckpt_file" ]; then
-    if [ -f "$recognition_dir/weights/yolo/weights/best.pt" ]; then
-        ckpt_file="$recognition_dir/weights/yolo/weights/best.pt"
-    else
-        ckpt_file="$recognition_dir/models/best_finger.pt"
-    fi
+    ckpt_file="$recognition_dir/weights/yolo/weights/best.pt"
 fi
 
 if [ ! -f "$recognition_script" ]; then
