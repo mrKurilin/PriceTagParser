@@ -43,8 +43,11 @@ private const val MAX_UPLOAD_SIZE_BYTES = 500L * 1024L * 1024L
 private const val MAX_MULTIPART_OVERHEAD_BYTES = 2L * 1024L * 1024L
 private const val APP_ROLE_SITE = "site"
 private const val APP_ROLE_API = "api"
+private const val FILES_DIR_ENV = "FILES_DIR"
+private const val DEFAULT_FILES_DIR = "files"
+private const val PROJECT_SERVER_FILES_DIR = "server/files"
 private val appRole = System.getenv("APP_ROLE") ?: APP_ROLE_API
-private val filesDirectory = File("files")
+private val filesDirectory = resolveFilesDirectory()
 private val webDirectory = File(System.getenv("WEB_DIR") ?: "web")
 private val processingScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 private val backendManager = YandexBackendManager()
@@ -140,7 +143,7 @@ fun Application.module() {
         get("/api/files/{name}/download") {
             val rawName = call.parameters["name"].orEmpty()
             val name = rawName.safeFileName()
-            val csvFile = filesDirectory.resolve(name.substringBeforeLast('.') + ".csv")
+            val csvFile = filesDirectory.resolve(name).expectedCsvFile()
             println("[Server] GET /api/files/{name}/download: rawName=$rawName, safeName=$name, csv=${csvFile.absolutePath}")
             if (!csvFile.exists()) {
                 println("[Server] GET /api/files/{name}/download: respond 404, csv not found")
@@ -175,15 +178,20 @@ fun Application.module() {
                         println("[Server] POST /api/upload: file part originalName=$originalFileName, safeName=$fileName")
                         if (fileName.isNotBlank()) {
                             val targetFile = filesDirectory.resolve(fileName)
+                            val expectedCsvFile = targetFile.expectedCsvFile()
                             try {
                                 targetFile.outputStream().use { output ->
                                     part.provider().copyToWithLimit(output, MAX_UPLOAD_SIZE_BYTES)
                                 }
+                                if (expectedCsvFile.exists()) {
+                                    check(expectedCsvFile.delete()) { "Could not delete stale CSV: ${expectedCsvFile.absolutePath}" }
+                                    println("[Server] POST /api/upload: deleted stale csv=${expectedCsvFile.absolutePath}")
+                                }
                                 uploadedFileName = fileName
                                 processingScope.launch {
-                                    PriceFileProcessor.process(targetFile)
+                                    processUploadedFile(targetFile, expectedCsvFile)
                                 }
-                                println("[Server] POST /api/upload: saved file=${targetFile.absolutePath}, size=${targetFile.length()}")
+                                println("[Server] POST /api/upload: saved file=${targetFile.absolutePath}, expectedCsv=${expectedCsvFile.absolutePath}, size=${targetFile.length()}")
                             } catch (_: UploadTooLargeException) {
                                 uploadTooLarge = true
                                 targetFile.delete()
@@ -317,6 +325,44 @@ private fun String.backendStatusJson(): String {
 
 private fun BackendPowerStatus.toStatusJson(): String =
     "{\"powerStatus\":\"$name\"}"
+
+private fun resolveFilesDirectory(): File {
+    val configuredDirectory = System.getenv(FILES_DIR_ENV)
+        ?.takeIf { it.isNotBlank() }
+        ?.let(::File)
+
+    if (configuredDirectory != null) {
+        return configuredDirectory
+    }
+
+    val projectServerFilesDirectory = File(PROJECT_SERVER_FILES_DIR)
+    return if (projectServerFilesDirectory.parentFile?.isDirectory == true) {
+        projectServerFilesDirectory
+    } else {
+        File(DEFAULT_FILES_DIR)
+    }
+}
+
+private suspend fun processUploadedFile(sourceFile: File, expectedCsvFile: File) {
+    val canonicalSourceFile = sourceFile.canonicalFile
+    val canonicalExpectedCsvFile = expectedCsvFile.canonicalFile
+    println("[Server] POST /api/upload: processing started file=${canonicalSourceFile.absolutePath}, expectedCsv=${canonicalExpectedCsvFile.absolutePath}")
+
+    try {
+        val actualCsvFile = PriceFileProcessor.process(canonicalSourceFile).canonicalFile
+        if (actualCsvFile != canonicalExpectedCsvFile) {
+            actualCsvFile.copyTo(canonicalExpectedCsvFile, overwrite = true)
+            println("[Server] POST /api/upload: copied csv from ${actualCsvFile.absolutePath} to expected path ${canonicalExpectedCsvFile.absolutePath}")
+        }
+        check(canonicalExpectedCsvFile.isFile) { "Expected CSV was not created: ${canonicalExpectedCsvFile.absolutePath}" }
+        println("[Server] POST /api/upload: processing finished csv=${canonicalExpectedCsvFile.absolutePath}, size=${canonicalExpectedCsvFile.length()}")
+    } catch (throwable: Throwable) {
+        println("[Server] POST /api/upload: processing failed file=${canonicalSourceFile.absolutePath}, expectedCsv=${canonicalExpectedCsvFile.absolutePath}: ${throwable.stackTraceToString()}")
+    }
+}
+
+private fun File.expectedCsvFile(): File =
+    (parentFile ?: File(DEFAULT_FILES_DIR)).resolve("$nameWithoutExtension.csv")
 
 private fun File.uploadedFilesCount(): Int =
     listFiles()
