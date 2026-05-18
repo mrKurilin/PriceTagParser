@@ -1,0 +1,12 @@
+numpy
+transformers
+ultralytics==8.4.51
+bitsandbytes>=0.46.1
+opencv-python==4.13.0.92
+gdown==5.2.1
+loguru
+matplotlib
+pandas
+peft
+filterpy
+tqdm
