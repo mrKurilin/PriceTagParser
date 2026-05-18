@@ -11,6 +11,8 @@ object PriceFileProcessor {
 
         val outputFile = sourceFile.parentFile.resolve("${sourceFile.nameWithoutExtension}.csv")
         val scriptFile = findScriptFile(sourceFile)
+
+        log("Starting price file processing: source=${sourceFile.absolutePath}, expectedCsv=${outputFile.absolutePath}")
         val process = ProcessBuilder(
             scriptFile.absolutePath,
             sourceFile.absolutePath,
@@ -19,11 +21,12 @@ object PriceFileProcessor {
             .redirectErrorStream(true)
             .start()
 
-        val output = process.inputStream.bufferedReader().use { it.readText() }
+        val output = process.streamOutput()
         val exitCode = process.waitFor()
         check(exitCode == 0) { "Price file processing failed with exit code $exitCode: $output" }
         check(outputFile.isFile) { "Price file processing did not create CSV: ${outputFile.absolutePath}. Output: $output" }
 
+        log("Finished price file processing: csv=${outputFile.absolutePath}")
         return outputFile
     }
 
@@ -43,12 +46,33 @@ object PriceFileProcessor {
             ?: File(SCRIPT_NAME).absoluteFile.requireExecutableScript()
     }
 
+    private fun Process.streamOutput(): String {
+        val recentOutput = ArrayDeque<String>()
+        inputStream.bufferedReader().useLines { lines ->
+            lines.forEach { line ->
+                log(line)
+                if (recentOutput.size == PROCESS_OUTPUT_TAIL_LINES) {
+                    recentOutput.removeFirst()
+                }
+                recentOutput.addLast(line)
+            }
+        }
+        return recentOutput.joinToString(System.lineSeparator())
+    }
+
+    private fun log(message: String) {
+        println("$LOG_PREFIX $message")
+        System.out.flush()
+    }
+
     private fun File.requireExecutableScript(): File {
         require(isFile) { "Processing script not found: $absolutePath" }
         require(canExecute()) { "Processing script is not executable: $absolutePath" }
         return canonicalFile
     }
 
+    private const val PROCESS_OUTPUT_TAIL_LINES = 200
+    private const val LOG_PREFIX = "[price-file-processor]"
     private const val SCRIPT_NAME = "generate_csv.sh"
     private const val SCRIPT_PATH_ENV = "PRICE_TAG_PARSER_SCRIPT"
 }

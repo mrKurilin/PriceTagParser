@@ -22,6 +22,13 @@ from trackers.tracking_utils.timer import Timer
 from price_tag_recognition.undistort import DistortionCorrector, CAM_SETTINGS, CAM_DISTORT_COEFFS
 from price_tag_recognition.image_processing import detect_qr_code, extract_qr_code, post_processing
 
+DEFAULT_CSV_PATH = "result.csv"
+DEFAULT_MAX_FRAMES = 100
+FRAME_LOG_INTERVAL = 20
+VLM_BATCH_SIZE = 1
+CSV_HEADER = ["id", "text", "qr_code_data", "qr_error"]
+
+
 def crop_quality(img):
     if img is None or img.size == 0:
         return 0.0
@@ -105,10 +112,18 @@ def get_hw_after_rotation(video_path):
 def imageflow_demo(predictor, args):
 
     cap = cv2.VideoCapture(args.video_path)
+    if not cap.isOpened():
+        raise ValueError(f"Could not open video: {args.video_path}")
 
     width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
     height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
     fps = cap.get(cv2.CAP_PROP_FPS)
+    frame_count = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+    max_frames = min(args.max_frames, frame_count) if frame_count > 0 else args.max_frames
+    logger.info(
+        f"Video opened: path={args.video_path}, size={width}x{height}, "
+        f"fps={fps:.2f}, frames_total={frame_count}, frames_to_process={max_frames}"
+    )
 
     if args.rotate:
         height, width = get_hw_after_rotation(args.video_path)
@@ -129,8 +144,6 @@ def imageflow_demo(predictor, args):
         use_byte=args.use_byte
     )
 
-    vlm_model, vlm_processor = initialize_vlm(device=args.device)
-
     best_crops = {}  # {id: (quality, crop)}
 
     distCorrector = DistortionCorrector(CAM_SETTINGS, CAM_DISTORT_COEFFS)
@@ -138,10 +151,10 @@ def imageflow_demo(predictor, args):
     timer = Timer()
     frame_id = 0
 
-    logger.info("Starting imageflow...")
+    logger.info("Starting CV detection and tracking")
 
     while True:
-        if frame_id == 100:
+        if frame_id >= args.max_frames:
             break
             
         ret, frame = cap.read()
@@ -206,17 +219,23 @@ def imageflow_demo(predictor, args):
 
         frame_id += 1
 
-        if frame_id % 20 == 0:
-            logger.info(f"Frame {frame_id}")
+        if frame_id % FRAME_LOG_INTERVAL == 0:
+            logger.info(
+                f"Processed frames: {frame_id}/{max_frames}, "
+                f"tracked_price_tags={len(best_crops)}"
+            )
 
     cap.release()
     if writer:
         writer.release()
 
+    logger.info(f"CV detection and tracking finished: tracked_price_tags={len(best_crops)}")
+
     ids = []
     images = []
     qr_results = []
 
+    logger.info("Starting QR parsing for best crops")
     for tid, (_, crop) in tqdm(best_crops.items(), desc="Processing crops and qrs"):
         if crop is None:
             continue
@@ -228,21 +247,32 @@ def imageflow_demo(predictor, args):
         images.append(crop)
         qr_results.append(parse_qr_code(crop))
 
-    texts = run_vlm_batch(
-        images,
-        vlm_model,
-        vlm_processor,
-        batch_size=1
-    )
+    logger.info(f"QR parsing finished: valid_crops={len(images)}")
+
+    if images:
+        logger.info(f"Initializing VLM model on device={args.device}")
+        vlm_model, vlm_processor = initialize_vlm(device=args.device)
+        logger.info(f"Starting VLM batch inference: crops={len(images)}")
+        texts = run_vlm_batch(
+            images,
+            vlm_model,
+            vlm_processor,
+            batch_size=VLM_BATCH_SIZE
+        )
+        logger.info("VLM batch inference finished")
+    else:
+        logger.warning("No valid crops found. CSV will contain only header")
+        texts = []
 
     output_csv = args.csv_path
     output_dir = os.path.dirname(output_csv)
     if output_dir:
         os.makedirs(output_dir, exist_ok=True)
 
+    logger.info(f"Writing CSV: {output_csv}")
     with open(output_csv, "w", newline="", encoding="utf-8") as f:
         writer = csv.writer(f)
-        writer.writerow(["id", "text", "qr_code_data", "qr_error"])
+        writer.writerow(CSV_HEADER)
 
         for tid, text, qr in zip(ids, texts, qr_results):
             writer.writerow([
@@ -251,6 +281,8 @@ def imageflow_demo(predictor, args):
                 qr.get("qr_code_data"),
                 qr.get("qr_error")
             ])
+
+    logger.info(f"CSV writing finished: {output_csv}, rows={len(texts)}")
 
 
 def parse_qr_code(frame):
@@ -294,6 +326,10 @@ def parse_qr_code(frame):
 
 def main(args):
     args.device = "cuda" if torch.cuda.is_available() else "cpu"
+    logger.info(
+        f"Starting price tag recognition: video_path={args.video_path}, "
+        f"csv_path={args.csv_path}, ckpt={args.ckpt}, device={args.device}"
+    )
 
     predictor = YOLOPredictor(
         model_path=args.ckpt,
@@ -303,6 +339,7 @@ def main(args):
     )
 
     imageflow_demo(predictor, args)
+    logger.info(f"Price tag recognition finished: csv_path={args.csv_path}")
 
 
 if __name__ == "__main__":
@@ -310,12 +347,13 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--ckpt", type=str, required=True)
     parser.add_argument("--video_path", type=str, required=True)
-    parser.add_argument("--csv_path", type=str, default="result.csv")
+    parser.add_argument("--csv_path", type=str, default=DEFAULT_CSV_PATH)
     parser.add_argument("--out_path", type=str, default=None)
     parser.add_argument("--conf", type=float, default=0.1)
     parser.add_argument("--track_thresh", type=float, default=0.5)
     parser.add_argument("--iou_thresh", type=float, default=0.3)
     parser.add_argument("--min_box_area", type=float, default=10)
+    parser.add_argument("--max_frames", type=int, default=DEFAULT_MAX_FRAMES)
     parser.add_argument("--use_byte", action="store_true")
     parser.add_argument("--rotate", action="store_true")
     args = parser.parse_args()

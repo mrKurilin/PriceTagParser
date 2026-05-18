@@ -1,6 +1,10 @@
 #!/bin/sh
 set -eu
 
+log() {
+    printf '%s [price-tag-processing] %s\n' "$(date '+%Y-%m-%dT%H:%M:%S%z')" "$*"
+}
+
 if [ "$#" -ne 1 ]; then
     echo "Usage: $0 <source-file>" >&2
     exit 2
@@ -12,6 +16,8 @@ if [ ! -f "$source_file" ]; then
     echo "Source file does not exist: $source_file" >&2
     exit 1
 fi
+
+log "Accepted source file: $source_file"
 
 script_dir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
 recognition_dir=${PRICE_TAG_RECOGNITION_DIR:-"$script_dir/priceTagRecognition"}
@@ -43,6 +49,10 @@ source_base=${source_name%.*}
 output_file="$source_dir/$source_base.csv"
 visualization_file=${PRICE_TAG_RECOGNITION_OUT_VIDEO:-}
 
+log "Recognition directory: $recognition_dir"
+log "Recognition checkpoint: $ckpt_file"
+log "Output CSV: $output_file"
+
 set -- \
     "$recognition_script" \
     --video_path "$source_file" \
@@ -58,14 +68,17 @@ if [ -n "$visualization_file" ]; then
     set -- "$@" --out_path "$visualization_file"
 fi
 
+log "Starting ML/CV recognition"
 (
     cd "$recognition_dir"
-    "$python_bin" "$@"
+    PYTHONUNBUFFERED=1 "$python_bin" "$@"
 )
+log "ML/CV recognition command finished"
 
 if [ ! -f "$output_file" ]; then
     echo "Recognition completed without creating CSV: $output_file" >&2
     exit 1
 fi
 
+log "CSV created: $output_file"
 printf '%s\n' "$output_file"
