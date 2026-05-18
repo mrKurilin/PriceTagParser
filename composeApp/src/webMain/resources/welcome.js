@@ -6,10 +6,9 @@
     // которая выполняет CSP-небезопасную проверку окружения. Поэтому грузим
     // только прямой wasm entrypoint, не откатываясь на compatibility-wrapper.
     // Реальный mount Compose может занять несколько секунд после "script onload".
-    // Поэтому ждём появления <canvas> внутри #composeAppRoot poll-ом
-    // и держим fallback-таймаут на случай ошибок инициализации wasm.
+    // Поэтому ждём появления <canvas> внутри #composeAppRoot через animation frame
+    // и держим дедлайн на случай ошибок инициализации wasm.
     var COMPOSE_SCRIPT_SRC = 'originWasmComposeApp.js';
-    var READY_POLL_INTERVAL_MS = 150;
     var READY_TIMEOUT_MS = 60000;
     var LOADING_TEXT = 'Загружаем приложение…';
     var LOAD_FAILURE_MESSAGE = 'Не удалось загрузить приложение. Попробуйте ещё раз.';
@@ -21,18 +20,15 @@
     var loaderText = document.getElementById('composeLoaderText');
     var composeRoot = document.getElementById('composeAppRoot');
     var loaded = false;
-    var readyPollId = null;
-    var readyTimeoutId = null;
+    var readyFrameId = null;
+    var readyDeadlineMs = 0;
 
     function stopWatching() {
-        if (readyPollId !== null) {
-            clearInterval(readyPollId);
-            readyPollId = null;
+        if (readyFrameId !== null) {
+            cancelAnimationFrame(readyFrameId);
+            readyFrameId = null;
         }
-        if (readyTimeoutId !== null) {
-            clearTimeout(readyTimeoutId);
-            readyTimeoutId = null;
-        }
+        readyDeadlineMs = 0;
     }
 
     function onReady() {
@@ -50,15 +46,23 @@
     }
 
     function watchForCompose() {
-        readyPollId = setInterval(function () {
+        readyDeadlineMs = performance.now() + READY_TIMEOUT_MS;
+
+        function checkComposeReady(nowMs) {
             if (composeRoot.querySelector('canvas') !== null) {
                 onReady();
+                return;
             }
-        }, READY_POLL_INTERVAL_MS);
 
-        readyTimeoutId = setTimeout(function () {
-            onFailure(START_FAILURE_MESSAGE);
-        }, READY_TIMEOUT_MS);
+            if (nowMs >= readyDeadlineMs) {
+                onFailure(START_FAILURE_MESSAGE);
+                return;
+            }
+
+            readyFrameId = requestAnimationFrame(checkComposeReady);
+        }
+
+        readyFrameId = requestAnimationFrame(checkComposeReady);
     }
 
     function loadComposeScript() {
