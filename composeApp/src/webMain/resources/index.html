@@ -1,20 +1,77 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="ru">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>PriceTagParser</title>
     <link type="text/css" rel="stylesheet" href="styles.css">
 </head>
-<body style="text-align: center; align-content: center">
-<svg xmlns="http://www.w3.org/2000/svg" width="40" height="40" viewBox="0 0 50 50" role="presentation">
-    <circle cx="25" cy="25" r="20" stroke="#ccc" stroke-width="4" fill="none"/>
-    <circle cx="25" cy="25" r="20" stroke="#333" stroke-width="4" fill="none" stroke-linecap="round"
-            stroke-dasharray="90 125">
-        <animateTransform attributeName="transform" type="rotate" from="0 25 25" to="360 25 25" dur="1s"
-                          repeatCount="indefinite"/>
-    </circle>
-</svg>
-<script type="application/javascript" src="composeApp.js"></script>
+<body>
+<!--
+  Лёгкий welcome-экран рендерится мгновенно из чистого HTML/CSS.
+  Тяжёлый composeApp.js подгружается лениво только по клику «Старт» —
+  это убирает «белую страницу» на холодном старте.
+-->
+<div id="welcome" class="welcome-screen">
+    <h1 class="welcome-title">Приветствуем</h1>
+    <p class="welcome-subtitle">PriceTagParser — распознавание ценников из фото и видео.</p>
+    <button id="welcomeStartButton" class="welcome-button" type="button">Старт</button>
+</div>
+
+<div id="composeLoader" class="welcome-loader" hidden>
+    <svg xmlns="http://www.w3.org/2000/svg" width="40" height="40" viewBox="0 0 50 50" role="presentation">
+        <circle cx="25" cy="25" r="20" stroke="#ccc" stroke-width="4" fill="none"/>
+        <circle cx="25" cy="25" r="20" stroke="#333" stroke-width="4" fill="none" stroke-linecap="round"
+                stroke-dasharray="90 125">
+            <animateTransform attributeName="transform" type="rotate" from="0 25 25" to="360 25 25" dur="1s"
+                              repeatCount="indefinite"/>
+        </circle>
+    </svg>
+    <div class="welcome-loader-text">Загружаем приложение…</div>
+</div>
+
+<div id="composeAppRoot" class="compose-root"></div>
+
+<script type="application/javascript">
+    (function () {
+        var startButton = document.getElementById('welcomeStartButton');
+        var welcome = document.getElementById('welcome');
+        var loader = document.getElementById('composeLoader');
+        var loaded = false;
+
+        var composeRoot = document.getElementById('composeAppRoot');
+
+        // Как только Compose вставит свои узлы в #composeAppRoot — прячем loader.
+        var observer = new MutationObserver(function () {
+            if (composeRoot.childElementCount > 0) {
+                loader.hidden = true;
+                observer.disconnect();
+            }
+        });
+
+        function startApp() {
+            if (loaded) return;
+            loaded = true;
+            welcome.hidden = true;
+            loader.hidden = false;
+
+            observer.observe(composeRoot, { childList: true });
+
+            var script = document.createElement('script');
+            script.src = 'composeApp.js';
+            script.async = true;
+            script.onerror = function () {
+                observer.disconnect();
+                loader.hidden = true;
+                welcome.hidden = false;
+                alert('Не удалось загрузить приложение. Попробуйте ещё раз.');
+                loaded = false;
+            };
+            document.body.appendChild(script);
+        }
+
+        startButton.addEventListener('click', startApp);
+    })();
+</script>
 </body>
 </html>
