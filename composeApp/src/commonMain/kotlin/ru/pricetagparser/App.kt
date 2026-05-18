@@ -284,8 +284,8 @@ private fun BackendToggleCard(
 ) {
     val isRunning = status.powerStatus == BackendPowerStatus.Running
     val isChanging = isActionRunning ||
-        status.powerStatus == BackendPowerStatus.Starting ||
-        status.powerStatus == BackendPowerStatus.Stopping
+            status.powerStatus == BackendPowerStatus.Starting ||
+            status.powerStatus == BackendPowerStatus.Stopping
     val statusText = when (status.powerStatus) {
         BackendPowerStatus.Running -> "Бэк включен"
         BackendPowerStatus.Stopped -> "Бэк выключен"

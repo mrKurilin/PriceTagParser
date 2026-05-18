@@ -42,6 +42,22 @@ internal actual suspend fun fetchFiles(): List<PricesFile> = withContext(Dispatc
         }
 }
 
+internal actual fun loadBackendInstanceId(): String = loadYandexEnvironment().instanceId
+
+internal actual fun loadYandexIamToken(): String = loadYandexEnvironment().iamToken
+
+internal actual suspend fun fetchBackendStatus(): BackendStatus = withContext(Dispatchers.IO) {
+    fetchBackendStatusViaYandexApi()
+}
+
+internal actual suspend fun startBackend(): BackendStatus = withContext(Dispatchers.IO) {
+    startBackendViaYandexApi()
+}
+
+internal actual suspend fun stopBackend(): BackendStatus = withContext(Dispatchers.IO) {
+    stopBackendViaYandexApi()
+}
+
 @Composable
 internal actual fun CompletedFileActions(file: PricesFile) {
     Row(
