@@ -20,7 +20,7 @@ fi
 log "Accepted source file: $source_file"
 
 script_dir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
-recognition_dir=${PRICE_TAG_RECOGNITION_DIR:-"$script_dir/priceTagRecognition"}
+recognition_dir="$script_dir/priceTagRecognition"
 recognition_script="$recognition_dir/price_tag_recognition/demo_track.py"
 python_bin=${PRICE_TAG_RECOGNITION_PYTHON:-python3}
 ckpt_file=${PRICE_TAG_RECOGNITION_CKPT:-}

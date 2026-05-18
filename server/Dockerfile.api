@@ -23,7 +23,9 @@ FROM pytorch/pytorch:2.5.0-cuda12.4-cudnn9-devel
 EXPOSE 8080
 WORKDIR /app
 
-ENV DEBIAN_FRONTEND=noninteractive
+ENV DEBIAN_FRONTEND=noninteractive \
+    PRICE_TAG_RECOGNITION_DIR=/app/priceTagRecognition \
+    PRICE_TAG_RECOGNITION_CKPT=/app/priceTagRecognition/weights/yolo/weights/best.pt
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
     openjdk-21-jre-headless \
@@ -42,5 +44,11 @@ COPY --from=build /workspace/server/build/libs/fat.jar /app/app.jar
 COPY --from=build /workspace/generate_csv.sh /app/generate_csv.sh
 COPY priceTagRecognition /app/priceTagRecognition
 
-RUN chmod +x /app/generate_csv.sh
+# priceTagRecognition/entrypoint.sh is hardcoded to /workspace, so point it to the API image location.
+RUN chmod +x /app/generate_csv.sh "$PRICE_TAG_RECOGNITION_DIR/entrypoint.sh" \
+    && rm -rf /workspace \
+    && ln -s "$PRICE_TAG_RECOGNITION_DIR" /workspace \
+    && "$PRICE_TAG_RECOGNITION_DIR/entrypoint.sh" \
+    && test -f "$PRICE_TAG_RECOGNITION_CKPT"
+
 ENTRYPOINT ["java","-jar","/app/app.jar"]
