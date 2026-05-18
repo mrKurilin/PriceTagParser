@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>PriceTagParser</title>
-    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self'; img-src 'self' data: blob:; connect-src 'self'; worker-src 'self' blob:; child-src 'self' blob:">
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-eval' 'wasm-unsafe-eval'; style-src 'self'; img-src 'self' data: blob:; connect-src 'self'; worker-src 'self' blob:; child-src 'self' blob:">
     <link type="text/css" rel="stylesheet" href="styles.css">
 </head>
 <body>
@@ -13,7 +13,7 @@
   Тяжёлый composeApp.js подгружается лениво только по клику «Старт» —
   это убирает «белую страницу» на холодном старте.
   Логика загрузки вынесена в welcome.js, чтобы пройти CSP без инлайновых скриптов.
-  Kotlin/Wasm требует только `wasm-unsafe-eval`, не включая опасный `unsafe-eval`.
+  Kotlin/Compose генерирует JS с `new Function`, поэтому CSP явно разрешает `'unsafe-eval'`.
 -->
 <div id="welcome" class="welcome-screen">
     <h1 class="welcome-title">Приветствуем</h1>

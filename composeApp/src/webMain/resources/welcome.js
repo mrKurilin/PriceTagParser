@@ -1,14 +1,12 @@
-// Управление welcome-экраном и ленивой загрузкой Kotlin/Wasm entrypoint.
+// Управление welcome-экраном и ленивой загрузкой Compose compatibility entrypoint.
 // Вынесено в отдельный файл, чтобы соответствовать CSP `script-src 'self'`
 // (инлайновые <script> блокируются без `'unsafe-inline'`).
 (function () {
-    // В composeWebCompatibility файл composeApp.js — это JS-обёртка,
-    // которая выполняет CSP-небезопасную проверку окружения. Поэтому грузим
-    // только прямой wasm entrypoint, не откатываясь на compatibility-wrapper.
+    // В composeWebCompatibility файл composeApp.js выбирает Wasm или JS fallback.
     // Реальный mount Compose может занять несколько секунд после "script onload".
     // Поэтому ждём появления <canvas> внутри #composeAppRoot через animation frame
     // и держим дедлайн на случай ошибок инициализации wasm.
-    var COMPOSE_SCRIPT_SRC = 'originWasmComposeApp.js';
+    var COMPOSE_SCRIPT_SRC = 'composeApp.js';
     var READY_TIMEOUT_MS = 60000;
     var LOADING_TEXT = 'Загружаем приложение…';
     var LOAD_FAILURE_MESSAGE = 'Не удалось загрузить приложение. Попробуйте ещё раз.';
