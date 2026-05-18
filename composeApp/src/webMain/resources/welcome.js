@@ -3,14 +3,12 @@
 // (инлайновые <script> блокируются без `'unsafe-inline'`).
 (function () {
     // В composeWebCompatibility файл composeApp.js — это JS-обёртка,
-    // которая проверяет окружение через eval/new Function и ломается под
-    // строгим CSP без `unsafe-eval`. Поэтому сначала грузим прямой wasm
-    // entrypoint. composeApp.js оставляем fallback-ом для обычной wasm-сборки,
-    // где originWasmComposeApp.js не создаётся.
+    // которая выполняет CSP-небезопасную проверку окружения. Поэтому грузим
+    // только прямой wasm entrypoint, не откатываясь на compatibility-wrapper.
     // Реальный mount Compose может занять несколько секунд после "script onload".
     // Поэтому ждём появления <canvas> внутри #composeAppRoot poll-ом
     // и держим fallback-таймаут на случай ошибок инициализации wasm.
-    var COMPOSE_SCRIPT_SOURCES = ['originWasmComposeApp.js', 'composeApp.js'];
+    var COMPOSE_SCRIPT_SRC = 'originWasmComposeApp.js';
     var READY_POLL_INTERVAL_MS = 150;
     var READY_TIMEOUT_MS = 60000;
     var LOADING_TEXT = 'Загружаем приложение…';
@@ -63,18 +61,12 @@
         }, READY_TIMEOUT_MS);
     }
 
-    function loadComposeScript(sourceIndex) {
-        var source = COMPOSE_SCRIPT_SOURCES[sourceIndex];
-        if (source === undefined) {
-            onFailure(LOAD_FAILURE_MESSAGE);
-            return;
-        }
-
+    function loadComposeScript() {
         var script = document.createElement('script');
-        script.src = source;
+        script.src = COMPOSE_SCRIPT_SRC;
         script.async = true;
         script.onerror = function () {
-            loadComposeScript(sourceIndex + 1);
+            onFailure(LOAD_FAILURE_MESSAGE);
         };
         document.body.appendChild(script);
     }
@@ -87,7 +79,7 @@
         loaderText.textContent = LOADING_TEXT;
 
         watchForCompose();
-        loadComposeScript(0);
+        loadComposeScript();
     }
 
     startButton.addEventListener('click', startApp);
