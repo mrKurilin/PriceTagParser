@@ -8,33 +8,7 @@
     <link type="text/css" rel="stylesheet" href="styles.css">
 </head>
 <body>
-<!--
-  Лёгкий welcome-экран рендерится мгновенно из чистого HTML/CSS.
-  Тяжёлый composeApp.js подгружается лениво только по клику «Старт» —
-  это убирает «белую страницу» на холодном старте.
-  Логика загрузки вынесена в welcome.js, чтобы пройти CSP без инлайновых скриптов.
-  Kotlin/Compose генерирует JS с `new Function`, поэтому CSP явно разрешает `'unsafe-eval'`.
--->
-<div id="welcome" class="welcome-screen">
-    <h1 class="welcome-title">Приветствуем</h1>
-    <p class="welcome-subtitle">PriceTagParser — распознавание ценников из фото и видео.</p>
-    <button id="welcomeStartButton" class="welcome-button" type="button">Старт</button>
-</div>
-
-<div id="composeLoader" class="welcome-loader" hidden>
-    <svg xmlns="http://www.w3.org/2000/svg" width="40" height="40" viewBox="0 0 50 50" role="presentation">
-        <circle cx="25" cy="25" r="20" stroke="#ccc" stroke-width="4" fill="none"/>
-        <circle cx="25" cy="25" r="20" stroke="#333" stroke-width="4" fill="none" stroke-linecap="round"
-                stroke-dasharray="90 125">
-            <animateTransform attributeName="transform" type="rotate" from="0 25 25" to="360 25 25" dur="1s"
-                              repeatCount="indefinite"/>
-        </circle>
-    </svg>
-    <div id="composeLoaderText" class="welcome-loader-text">Загружаем приложение…</div>
-</div>
-
 <div id="composeAppRoot" class="compose-root"></div>
-
-<script type="application/javascript" src="welcome.js" defer></script>
+<script type="application/javascript" src="composeApp.js" defer></script>
 </body>
 </html>

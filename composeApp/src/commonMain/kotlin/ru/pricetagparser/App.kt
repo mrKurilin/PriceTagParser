@@ -13,9 +13,11 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
@@ -37,6 +39,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.CoroutineScope
@@ -45,6 +48,14 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
 private const val REFRESH_INTERVAL_SECONDS = 10
+private const val APP_TITLE = "PriceTagParser"
+private const val WELCOME_TITLE = "Приветствуем"
+private const val WELCOME_SUBTITLE = "PriceTagParser — распознавание ценников из фото и видео."
+private const val WELCOME_START_BUTTON_TEXT = "Старт"
+
+private val AppBackgroundColor = Color(0xFFF6F7FB)
+private val WelcomeCardMaxWidth = 520.dp
+private val WelcomeSubtitleColor = Color(0xFF5F6368)
 
 internal data class PricesFile(
     val name: String,
@@ -57,65 +68,150 @@ internal data class PricesFile(
 @Composable
 fun App() {
     MaterialTheme {
-        val scope = rememberCoroutineScope()
-        var files by remember { mutableStateOf(emptyList<PricesFile>()) }
-        var isLoading by remember { mutableStateOf(true) }
-        var isUploading by remember { mutableStateOf(false) }
-        var errorMessage by remember { mutableStateOf<String?>(null) }
-        var backendStatus by remember { mutableStateOf(BackendStatus(BackendPowerStatus.Unknown)) }
-        var isBackendActionRunning by remember { mutableStateOf(false) }
-        var backendErrorMessage by remember { mutableStateOf<String?>(null) }
-        var refreshProgress by remember { mutableStateOf(0f) }
+        var isMainScreenVisible by remember { mutableStateOf(false) }
 
-        Surface(
-            modifier = Modifier.fillMaxSize(),
-            color = Color(0xFFF6F7FB),
+        if (isMainScreenVisible) {
+            MainAppScreen()
+        } else {
+            WelcomeScreen(onStart = { isMainScreenVisible = true })
+        }
+    }
+}
+
+@Composable
+private fun WelcomeScreen(
+    onStart: () -> Unit,
+) {
+    Surface(
+        modifier = Modifier.fillMaxSize(),
+        color = AppBackgroundColor,
+    ) {
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(24.dp),
+            contentAlignment = Alignment.Center,
         ) {
-            Box(
+            Card(
                 modifier = Modifier
-                    .fillMaxSize()
-                    .padding(24.dp),
+                    .widthIn(max = WelcomeCardMaxWidth)
+                    .fillMaxWidth(),
+                shape = RoundedCornerShape(24.dp),
+                colors = CardDefaults.cardColors(containerColor = Color.White),
             ) {
                 Column(
                     modifier = Modifier
-                        .fillMaxSize()
-                        .padding(bottom = 88.dp),
+                        .fillMaxWidth()
+                        .padding(32.dp),
                     horizontalAlignment = Alignment.CenterHorizontally,
                 ) {
                     Text(
-                        text = "PriceTagParser",
+                        text = WELCOME_TITLE,
                         style = MaterialTheme.typography.headlineLarge,
                         fontWeight = FontWeight.Bold,
+                        textAlign = TextAlign.Center,
                     )
 
                     Spacer(modifier = Modifier.height(16.dp))
 
-                    RefreshProgressBar(progress = refreshProgress)
-
-                    Spacer(modifier = Modifier.height(16.dp))
-
-                    BackendToggleCard(
-                        status = backendStatus,
-                        isActionRunning = isBackendActionRunning,
-                        errorMessage = backendErrorMessage,
-                        onEnabledChanged = { enabled ->
-                            changeBackendPower(
-                                scope = scope,
-                                enabled = enabled,
-                                onActionRunningChanged = { isBackendActionRunning = it },
-                                onErrorChanged = { backendErrorMessage = it },
-                                onStatusChanged = { backendStatus = it },
-                            )
-                        },
+                    Text(
+                        text = WELCOME_SUBTITLE,
+                        color = WelcomeSubtitleColor,
+                        textAlign = TextAlign.Center,
                     )
 
                     Spacer(modifier = Modifier.height(24.dp))
 
-                    FilesCard(
-                        files = files,
-                        isLoading = isLoading,
-                        errorMessage = errorMessage,
-                        onRetry = {
+                    Button(onClick = onStart) {
+                        Text(text = WELCOME_START_BUTTON_TEXT)
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun MainAppScreen() {
+    val scope = rememberCoroutineScope()
+    var files by remember { mutableStateOf(emptyList<PricesFile>()) }
+    var isLoading by remember { mutableStateOf(true) }
+    var isUploading by remember { mutableStateOf(false) }
+    var errorMessage by remember { mutableStateOf<String?>(null) }
+    var backendStatus by remember { mutableStateOf(BackendStatus(BackendPowerStatus.Unknown)) }
+    var isBackendActionRunning by remember { mutableStateOf(false) }
+    var backendErrorMessage by remember { mutableStateOf<String?>(null) }
+    var refreshProgress by remember { mutableStateOf(0f) }
+
+    Surface(
+        modifier = Modifier.fillMaxSize(),
+        color = AppBackgroundColor,
+    ) {
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(24.dp),
+        ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(bottom = 88.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
+            ) {
+                Text(
+                    text = APP_TITLE,
+                    style = MaterialTheme.typography.headlineLarge,
+                    fontWeight = FontWeight.Bold,
+                )
+
+                Spacer(modifier = Modifier.height(16.dp))
+
+                RefreshProgressBar(progress = refreshProgress)
+
+                Spacer(modifier = Modifier.height(16.dp))
+
+                BackendToggleCard(
+                    status = backendStatus,
+                    isActionRunning = isBackendActionRunning,
+                    errorMessage = backendErrorMessage,
+                    onEnabledChanged = { enabled ->
+                        changeBackendPower(
+                            scope = scope,
+                            enabled = enabled,
+                            onActionRunningChanged = { isBackendActionRunning = it },
+                            onErrorChanged = { backendErrorMessage = it },
+                            onStatusChanged = { backendStatus = it },
+                        )
+                    },
+                )
+
+                Spacer(modifier = Modifier.height(24.dp))
+
+                FilesCard(
+                    files = files,
+                    isLoading = isLoading,
+                    errorMessage = errorMessage,
+                    onRetry = {
+                        scope.launchSafely {
+                            loadFiles(
+                                onLoadingChanged = { isLoading = it },
+                                onFilesLoaded = { files = it },
+                                onErrorChanged = { errorMessage = it },
+                            )
+                        }
+                    },
+                )
+            }
+
+            UploadButton(
+                modifier = Modifier.align(Alignment.BottomCenter),
+                isUploading = isUploading,
+                onClick = {
+                    startUpload(
+                        scope = scope,
+                        onUploadingChanged = { isUploading = it },
+                        onFileChanged = { file -> files = files.replacingFile(file) },
+                        onUploaded = {
                             scope.launchSafely {
                                 loadFiles(
                                     onLoadingChanged = { isLoading = it },
@@ -124,49 +220,28 @@ fun App() {
                                 )
                             }
                         },
-                    )
-                }
-
-                UploadButton(
-                    modifier = Modifier.align(Alignment.BottomCenter),
-                    isUploading = isUploading,
-                    onClick = {
-                        startUpload(
-                            scope = scope,
-                            onUploadingChanged = { isUploading = it },
-                            onFileChanged = { file -> files = files.replacingFile(file) },
-                            onUploaded = {
-                                scope.launchSafely {
-                                    loadFiles(
-                                        onLoadingChanged = { isLoading = it },
-                                        onFilesLoaded = { files = it },
-                                        onErrorChanged = { errorMessage = it },
-                                    )
-                                }
-                            },
-                            onError = { errorMessage = "Не удалось загрузить файл" },
-                        )
-                    },
-                )
-            }
-        }
-
-        // Загрузочные задачи запускаются после первой композиции,
-        // поэтому стартовый UI отрисовывается без ожидания сети.
-        LaunchedEffect(Unit) {
-            runRefreshLoop(
-                onProgressChanged = { refreshProgress = it },
-                onRefresh = {
-                    refreshData(
-                        onFilesLoadingChanged = { isLoading = it },
-                        onFilesLoaded = { files = it },
-                        onFilesErrorChanged = { errorMessage = it },
-                        onBackendStatusChanged = { backendStatus = it },
-                        onBackendErrorChanged = { backendErrorMessage = it },
+                        onError = { errorMessage = "Не удалось загрузить файл" },
                     )
                 },
             )
         }
+    }
+
+    // Загрузочные задачи запускаются только после нажатия «Старт»,
+    // поэтому welcome-экран не ждёт сеть и текущую логику приложения.
+    LaunchedEffect(Unit) {
+        runRefreshLoop(
+            onProgressChanged = { refreshProgress = it },
+            onRefresh = {
+                refreshData(
+                    onFilesLoadingChanged = { isLoading = it },
+                    onFilesLoaded = { files = it },
+                    onFilesErrorChanged = { errorMessage = it },
+                    onBackendStatusChanged = { backendStatus = it },
+                    onBackendErrorChanged = { backendErrorMessage = it },
+                )
+            },
+        )
     }
 }
 
