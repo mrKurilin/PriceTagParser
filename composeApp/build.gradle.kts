@@ -39,9 +39,6 @@ kotlin {
             implementation(libs.kotlinx.serializationJson)
             implementation(projects.shared)
         }
-        commonTest.dependencies {
-            implementation(libs.kotlin.test)
-        }
         jvmMain.dependencies {
             implementation(compose.desktop.currentOs)
             implementation(libs.ktor.clientJava)
@@ -60,4 +57,3 @@ compose.desktop {
         }
     }
 }
-

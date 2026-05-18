@@ -24,6 +24,7 @@ import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -39,6 +40,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
@@ -60,36 +62,10 @@ fun App() {
         var isLoading by remember { mutableStateOf(true) }
         var isUploading by remember { mutableStateOf(false) }
         var errorMessage by remember { mutableStateOf<String?>(null) }
+        var backendStatus by remember { mutableStateOf(BackendStatus(BackendPowerStatus.Unknown)) }
+        var isBackendActionRunning by remember { mutableStateOf(false) }
+        var backendErrorMessage by remember { mutableStateOf<String?>(null) }
         var refreshProgress by remember { mutableStateOf(0f) }
-
-        fun replaceFile(file: PricesFile) {
-            files = listOf(file) + files.filterNot { it.name == file.name }
-        }
-
-        suspend fun loadFiles() {
-            isLoading = true
-            errorMessage = null
-            try {
-                files = fetchFiles()
-            } catch (_: Throwable) {
-                errorMessage = "Не удалось загрузить список файлов"
-            } finally {
-                isLoading = false
-            }
-        }
-
-        LaunchedEffect(Unit) {
-            loadFiles()
-            while (true) {
-                repeat(REFRESH_INTERVAL_SECONDS) { second ->
-                    refreshProgress = second.toFloat() / REFRESH_INTERVAL_SECONDS
-                    delay(1_000)
-                }
-                refreshProgress = 1f
-                loadFiles()
-                refreshProgress = 0f
-            }
-        }
 
         Surface(
             modifier = Modifier.fillMaxSize(),
@@ -118,6 +94,21 @@ fun App() {
 
                     Spacer(modifier = Modifier.height(16.dp))
 
+                    BackendToggleCard(
+                        status = backendStatus,
+                        isActionRunning = isBackendActionRunning,
+                        errorMessage = backendErrorMessage,
+                        onEnabledChanged = { enabled ->
+                            changeBackendPower(
+                                scope = scope,
+                                enabled = enabled,
+                                onActionRunningChanged = { isBackendActionRunning = it },
+                                onErrorChanged = { backendErrorMessage = it },
+                                onStatusChanged = { backendStatus = it },
+                            )
+                        },
+                    )
+
                     Spacer(modifier = Modifier.height(24.dp))
 
                     FilesCard(
@@ -126,7 +117,11 @@ fun App() {
                         errorMessage = errorMessage,
                         onRetry = {
                             scope.launchSafely {
-                                loadFiles()
+                                loadFiles(
+                                    onLoadingChanged = { isLoading = it },
+                                    onFilesLoaded = { files = it },
+                                    onErrorChanged = { errorMessage = it },
+                                )
                             }
                         },
                     )
@@ -139,10 +134,14 @@ fun App() {
                         startUpload(
                             scope = scope,
                             onUploadingChanged = { isUploading = it },
-                            onFileChanged = ::replaceFile,
+                            onFileChanged = { file -> files = files.replacingFile(file) },
                             onUploaded = {
                                 scope.launchSafely {
-                                    loadFiles()
+                                    loadFiles(
+                                        onLoadingChanged = { isLoading = it },
+                                        onFilesLoaded = { files = it },
+                                        onErrorChanged = { errorMessage = it },
+                                    )
                                 }
                             },
                             onError = { errorMessage = "Не удалось загрузить файл" },
@@ -151,6 +150,120 @@ fun App() {
                 )
             }
         }
+
+        // Загрузочные задачи запускаются после первой композиции,
+        // поэтому стартовый UI отрисовывается без ожидания сети.
+        LaunchedEffect(Unit) {
+            runRefreshLoop(
+                onProgressChanged = { refreshProgress = it },
+                onRefresh = {
+                    refreshData(
+                        onFilesLoadingChanged = { isLoading = it },
+                        onFilesLoaded = { files = it },
+                        onFilesErrorChanged = { errorMessage = it },
+                        onBackendStatusChanged = { backendStatus = it },
+                        onBackendErrorChanged = { backendErrorMessage = it },
+                    )
+                },
+            )
+        }
+    }
+}
+
+private fun List<PricesFile>.replacingFile(file: PricesFile): List<PricesFile> =
+    listOf(file) + filterNot { it.name == file.name }
+
+private suspend fun loadFiles(
+    onLoadingChanged: (Boolean) -> Unit,
+    onFilesLoaded: (List<PricesFile>) -> Unit,
+    onErrorChanged: (String?) -> Unit,
+) {
+    onLoadingChanged(true)
+    onErrorChanged(null)
+    try {
+        onFilesLoaded(fetchFiles())
+    } catch (_: Throwable) {
+        onErrorChanged("Не удалось загрузить список файлов")
+    } finally {
+        onLoadingChanged(false)
+    }
+}
+
+private suspend fun loadBackendStatus(
+    onStatusChanged: (BackendStatus) -> Unit,
+    onErrorChanged: (String?) -> Unit,
+) {
+    onErrorChanged(null)
+    try {
+        onStatusChanged(fetchBackendStatus())
+    } catch (error: Throwable) {
+        onStatusChanged(BackendStatus(BackendPowerStatus.Unknown))
+        onErrorChanged("Не удалось получить статус бэка:\n${error.message}")
+    }
+}
+
+private suspend fun refreshData(
+    onFilesLoadingChanged: (Boolean) -> Unit,
+    onFilesLoaded: (List<PricesFile>) -> Unit,
+    onFilesErrorChanged: (String?) -> Unit,
+    onBackendStatusChanged: (BackendStatus) -> Unit,
+    onBackendErrorChanged: (String?) -> Unit,
+) = coroutineScope {
+    launch {
+        loadBackendStatus(
+            onStatusChanged = onBackendStatusChanged,
+            onErrorChanged = onBackendErrorChanged,
+        )
+    }
+    launch {
+        loadFiles(
+            onLoadingChanged = onFilesLoadingChanged,
+            onFilesLoaded = onFilesLoaded,
+            onErrorChanged = onFilesErrorChanged,
+        )
+    }
+}
+
+private suspend fun runRefreshLoop(
+    onProgressChanged: (Float) -> Unit,
+    onRefresh: suspend () -> Unit,
+) {
+    onRefresh()
+    while (true) {
+        repeat(REFRESH_INTERVAL_SECONDS) { second ->
+            onProgressChanged(second.toFloat() / REFRESH_INTERVAL_SECONDS)
+            delay(1_000)
+        }
+        onProgressChanged(1f)
+        onRefresh()
+        onProgressChanged(0f)
+    }
+}
+
+private fun changeBackendPower(
+    scope: CoroutineScope,
+    enabled: Boolean,
+    onActionRunningChanged: (Boolean) -> Unit,
+    onErrorChanged: (String?) -> Unit,
+    onStatusChanged: (BackendStatus) -> Unit,
+) {
+    scope.launchSafely(
+        onError = {
+            onErrorChanged(
+                if (enabled) "Не удалось включить бэк" else "Не удалось выключить бэк",
+            )
+            onActionRunningChanged(false)
+        },
+    ) {
+        onActionRunningChanged(true)
+        onErrorChanged(null)
+        onStatusChanged(
+            BackendStatus(
+                if (enabled) BackendPowerStatus.Starting else BackendPowerStatus.Stopping,
+            ),
+        )
+        onStatusChanged(if (enabled) startBackend() else stopBackend())
+        onActionRunningChanged(false)
     }
 }
 
@@ -160,6 +273,70 @@ private fun RefreshProgressBar(progress: Float) {
         progress = { progress },
         modifier = Modifier.fillMaxWidth(),
     )
+}
+
+@Composable
+private fun BackendToggleCard(
+    status: BackendStatus,
+    isActionRunning: Boolean,
+    errorMessage: String?,
+    onEnabledChanged: (Boolean) -> Unit,
+) {
+    val isRunning = status.powerStatus == BackendPowerStatus.Running
+    val isChanging = isActionRunning ||
+        status.powerStatus == BackendPowerStatus.Starting ||
+        status.powerStatus == BackendPowerStatus.Stopping
+    val statusText = when (status.powerStatus) {
+        BackendPowerStatus.Running -> "Бэк включен"
+        BackendPowerStatus.Stopped -> "Бэк выключен"
+        BackendPowerStatus.Starting -> "Бэк запускается"
+        BackendPowerStatus.Stopping -> "Бэк останавливается"
+        BackendPowerStatus.Unknown -> "Статус бэка неизвестен"
+    }
+
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(20.dp),
+        colors = CardDefaults.cardColors(containerColor = Color.White),
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(20.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween,
+        ) {
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = "Бэк обработки",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold,
+                )
+
+                Spacer(modifier = Modifier.height(4.dp))
+
+                Text(
+                    text = errorMessage ?: statusText,
+                    color = if (errorMessage == null) Color(0xFF5F6368) else MaterialTheme.colorScheme.error,
+                )
+            }
+
+            Spacer(modifier = Modifier.width(16.dp))
+
+            if (isChanging) {
+                CircularProgressIndicator(
+                    modifier = Modifier.size(28.dp),
+                    strokeWidth = 2.dp,
+                )
+            } else {
+                Switch(
+                    checked = isRunning,
+                    onCheckedChange = onEnabledChanged,
+                    enabled = status.powerStatus != BackendPowerStatus.Unknown,
+                )
+            }
+        }
+    }
 }
 
 @Composable
@@ -194,18 +371,6 @@ private fun startUpload(
     onUploaded: () -> Unit,
     onError: () -> Unit,
 ) {
-    fun uploadFileState(
-        fileName: String,
-        uploadProgress: Int? = null,
-        uploadFailed: Boolean = false,
-    ) = PricesFile(
-        name = fileName,
-        csvName = fileName.substringBeforeLast('.') + ".csv",
-        hasCsv = false,
-        uploadProgress = uploadProgress,
-        uploadFailed = uploadFailed,
-    )
-
     pickAndUploadFile(
         scope = scope,
         onUploadingChanged = onUploadingChanged,
@@ -226,6 +391,18 @@ private fun startUpload(
         },
     )
 }
+
+private fun uploadFileState(
+    fileName: String,
+    uploadProgress: Int? = null,
+    uploadFailed: Boolean = false,
+) = PricesFile(
+    name = fileName,
+    csvName = fileName.substringBeforeLast('.') + ".csv",
+    hasCsv = false,
+    uploadProgress = uploadProgress,
+    uploadFailed = uploadFailed,
+)
 
 @Composable
 private fun UploadButton(
@@ -505,6 +682,12 @@ private fun CoroutineScope.launchSafely(
 }
 
 internal expect suspend fun fetchFiles(): List<PricesFile>
+
+internal expect suspend fun fetchBackendStatus(): BackendStatus
+
+internal expect suspend fun startBackend(): BackendStatus
+
+internal expect suspend fun stopBackend(): BackendStatus
 
 @Composable
 internal expect fun CompletedFileActions(file: PricesFile)
