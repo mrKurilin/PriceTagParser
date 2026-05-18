@@ -9,6 +9,7 @@ object PriceFileProcessor {
         require(sourceFile.isFile) { "Source file does not exist: ${sourceFile.absolutePath}" }
         require(!sourceFile.extension.equals("csv", ignoreCase = true)) { "CSV files are not source files: ${sourceFile.absolutePath}" }
 
+        val outputFile = sourceFile.parentFile.resolve("${sourceFile.nameWithoutExtension}.csv")
         val scriptFile = findScriptFile(sourceFile)
         val process = ProcessBuilder(
             scriptFile.absolutePath,
@@ -21,8 +22,9 @@ object PriceFileProcessor {
         val output = process.inputStream.bufferedReader().use { it.readText() }
         val exitCode = process.waitFor()
         check(exitCode == 0) { "Price file processing failed with exit code $exitCode: $output" }
+        check(outputFile.isFile) { "Price file processing did not create CSV: ${outputFile.absolutePath}. Output: $output" }
 
-        return sourceFile.parentFile.resolve("${sourceFile.nameWithoutExtension}.csv")
+        return outputFile
     }
 
     private fun findScriptFile(sourceFile: File): File {
@@ -44,11 +46,9 @@ object PriceFileProcessor {
     private fun File.requireExecutableScript(): File {
         require(isFile) { "Processing script not found: $absolutePath" }
         require(canExecute()) { "Processing script is not executable: $absolutePath" }
-        Thread.sleep(PROCESSING_SIMULATION_DELAY_MS)
         return canonicalFile
     }
 
-    private const val PROCESSING_SIMULATION_DELAY_MS = 30_000L
     private const val SCRIPT_NAME = "generate_csv.sh"
     private const val SCRIPT_PATH_ENV = "PRICE_TAG_PARSER_SCRIPT"
 }

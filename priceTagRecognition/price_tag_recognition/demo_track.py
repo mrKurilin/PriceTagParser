@@ -235,7 +235,10 @@ def imageflow_demo(predictor, args):
         batch_size=1
     )
 
-    output_csv = "result.csv"
+    output_csv = args.csv_path
+    output_dir = os.path.dirname(output_csv)
+    if output_dir:
+        os.makedirs(output_dir, exist_ok=True)
 
     with open(output_csv, "w", newline="", encoding="utf-8") as f:
         writer = csv.writer(f)
@@ -307,6 +310,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--ckpt", type=str, required=True)
     parser.add_argument("--video_path", type=str, required=True)
+    parser.add_argument("--csv_path", type=str, default="result.csv")
     parser.add_argument("--out_path", type=str, default=None)
     parser.add_argument("--conf", type=float, default=0.1)
     parser.add_argument("--track_thresh", type=float, default=0.5)
