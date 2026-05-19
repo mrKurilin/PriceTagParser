@@ -41,8 +41,9 @@ PYTORCH_INSTALL_HINT = (
 CUDA_NOT_USED_HINT = (
     "CPU fallback is allowed. If this machine is expected to use an NVIDIA GPU, check that the host has a "
     "compatible NVIDIA driver, NVIDIA Container Toolkit is installed for Docker, and the container was started "
-    "with GPU access: `docker run --gpus all` or `docker compose -f server/docker-compose.api.yml up --build`. "
-    "Also verify NVIDIA_VISIBLE_DEVICES=all and NVIDIA_DRIVER_CAPABILITIES includes compute,utility."
+    "with NVIDIA runtime: `docker run --runtime=nvidia -e NVIDIA_VISIBLE_DEVICES=all` or "
+    "`docker compose -f server/docker-compose.api.yml up --build`. Also verify NVIDIA_VISIBLE_DEVICES=all "
+    "and NVIDIA_DRIVER_CAPABILITIES includes compute,utility."
 )
 
 

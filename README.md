@@ -87,7 +87,7 @@
 
 Команды выполняются на сервере обработки из папки `server`.
 
-REST API compose настроен на NVIDIA GPU: нужен Linux-хост с NVIDIA-драйвером, рабочим `nvidia-smi` и установленным NVIDIA Container Toolkit для Docker. Если GPU на хосте нет, Python-скрипт умеет падать обратно на CPU, но Docker Compose с `gpus: all` может не стартовать на CPU-only машине.
+REST API compose настроен на NVIDIA GPU через `runtime: nvidia`: нужен Linux-хост с NVIDIA-драйвером, рабочим `nvidia-smi` и установленным NVIDIA Container Toolkit для Docker. `runtime: nvidia` используется вместо `gpus: all`, чтобы обойти Docker CDI ошибку `failed to discover GPU vendor from CDI: no known GPU vendor found`.
 
 Перед запуском REST API передайте переменные для управления Yandex Compute в окружение Docker Compose:
 

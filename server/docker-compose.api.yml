@@ -7,7 +7,7 @@ services:
         PRICE_TAG_RUNTIME_IMAGE: "${PRICE_TAG_RUNTIME_IMAGE:-eclipse-temurin:21-jre-noble}"
         PYTORCH_INDEX_URL: "https://download.pytorch.org/whl/cu124"
         PYTORCH_EXPECT_CUDA: "true"
-    gpus: all
+    runtime: nvidia
     ports:
       - "${API_HOST_PORT:-8080}:8080"
     env_file:
