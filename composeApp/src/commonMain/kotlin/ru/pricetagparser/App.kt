@@ -49,7 +49,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
 private const val REFRESH_INTERVAL_SECONDS = 10
-private const val LOGS_EXPANDED_WEIGHT = 0.5f
+private const val LOGS_EXPANDED_WEIGHT = 1.5f
 private const val APP_TITLE = "PriceTagParser"
 
 private val AppBackgroundColor = Color(0xFFF6F7FB)
