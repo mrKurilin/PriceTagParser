@@ -83,9 +83,11 @@
 - **сервер сайта** — отдаёт собранный Compose Web UI как статические файлы;
 - **сервер обработки** — запускает REST API на Ktor, хранит файлы и выполняет обработку через `generate_csv.sh`.
 
-### Запуск REST API сервера обработки с GPU
+### Запуск REST API сервера обработки
 
 Команды выполняются на сервере обработки из папки `server`.
+
+REST API compose настроен на NVIDIA GPU: нужен Linux-хост с NVIDIA-драйвером, рабочим `nvidia-smi` и установленным NVIDIA Container Toolkit для Docker. Если GPU на хосте нет, Python-скрипт умеет падать обратно на CPU, но Docker Compose с `gpus: all` может не стартовать на CPU-only машине.
 
 Перед запуском REST API передайте переменные для управления Yandex Compute в окружение Docker Compose:
 
@@ -106,17 +108,17 @@ YANDEX_INSTANCE_ID=<instance-id>
 ```
 
 ```shell
-# Собрать и запустить REST API
-docker-compose -f docker-compose.api.yml up --build
+# Собрать и запустить REST API с NVIDIA visibility и CUDA 12.4 PyTorch wheels
+docker compose -f docker-compose.api.yml up --build
 
-# Или запустить REST API в фоне
-docker-compose -f docker-compose.api.yml up --build -d
+# Запустить REST API в фоне
+docker compose -f docker-compose.api.yml up --build -d
 
 # Проверить, что переменные попали в контейнер
-docker-compose -f docker-compose.api.yml exec api printenv | grep YANDEX
+docker compose -f docker-compose.api.yml exec api printenv | grep -E 'YANDEX|NVIDIA'
 
 # Остановить REST API
-docker-compose -f docker-compose.api.yml down
+docker compose -f docker-compose.api.yml down
 ```
 
 После старта REST API будет доступен по адресу:

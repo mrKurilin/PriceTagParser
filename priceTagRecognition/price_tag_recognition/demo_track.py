@@ -34,15 +34,15 @@ NO_VISIBLE_GPU_VALUES = {"", "-1", "none", "void"}
 CUDA_REASON_SEPARATOR = " | "
 UNKNOWN_CUDA_DEVICE_NAME = "unknown"
 PYTORCH_INSTALL_HINT = (
-    "CPU fallback is allowed. If NVIDIA CUDA is expected in Docker, build with a CUDA-capable runtime "
-    "image and PYTORCH_INDEX_URL=https://download.pytorch.org/whl/cu124. For CPU-only builds, leave "
-    "PYTORCH_INDEX_URL empty so pip can select compatible default wheels."
+    "CPU fallback is allowed. If NVIDIA CUDA is expected in Docker, build with "
+    "PYTORCH_INDEX_URL=https://download.pytorch.org/whl/cu124 and PYTORCH_EXPECT_CUDA=true. "
+    "For REST API Docker Compose, run: docker compose -f server/docker-compose.api.yml up --build."
 )
 CUDA_NOT_USED_HINT = (
     "CPU fallback is allowed. If this machine is expected to use an NVIDIA GPU, check that the host has a "
-    "compatible NVIDIA driver, NVIDIA Container Toolkit is installed for Docker, the container was started "
-    "with GPU access (`docker run --gpus all` or optional Docker Compose GPU settings), and CUDA device "
-    "visibility is not restricted by environment variables."
+    "compatible NVIDIA driver, NVIDIA Container Toolkit is installed for Docker, and the container was started "
+    "with GPU access: `docker run --gpus all` or `docker compose -f server/docker-compose.api.yml up --build`. "
+    "Also verify NVIDIA_VISIBLE_DEVICES=all and NVIDIA_DRIVER_CAPABILITIES includes compute,utility."
 )
 
 

@@ -5,8 +5,9 @@ services:
       dockerfile: server/Dockerfile.api
       args:
         PRICE_TAG_RUNTIME_IMAGE: "${PRICE_TAG_RUNTIME_IMAGE:-eclipse-temurin:21-jre-noble}"
-        PYTORCH_INDEX_URL: "${PYTORCH_INDEX_URL:-}"
-        PYTORCH_EXPECT_CUDA: "${PYTORCH_EXPECT_CUDA:-false}"
+        PYTORCH_INDEX_URL: "https://download.pytorch.org/whl/cu124"
+        PYTORCH_EXPECT_CUDA: "true"
+    gpus: all
     ports:
       - "${API_HOST_PORT:-8080}:8080"
     env_file:
@@ -15,6 +16,8 @@ services:
       - APP_ROLE=api
       - SERVER_PORT=8080
       - PRICE_TAG_PARSER_SCRIPT=/app/generate_csv.sh
+      - NVIDIA_VISIBLE_DEVICES=all
+      - NVIDIA_DRIVER_CAPABILITIES=compute,utility
     volumes:
       - ./files:/app/files
     restart: always

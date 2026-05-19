@@ -1,9 +1,19 @@
 # Price Tag Recognition
 
-- build and push docker image with:
+- build and push CPU-capable docker image with:
 
 ```bash
 docker buildx build --platform linux/amd64 -t zarus03/price-tag-recognition:latest --push .
+```
+
+- build CUDA 12.4 / NVIDIA GPU image with:
+
+```bash
+docker buildx build --platform linux/amd64 \
+    --build-arg PYTORCH_INDEX_URL=https://download.pytorch.org/whl/cu124 \
+    --build-arg PYTORCH_EXPECT_CUDA=true \
+    -t zarus03/price-tag-recognition:cuda124 \
+    --push .
 ```
 
 - launch the demo with:
