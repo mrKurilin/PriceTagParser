@@ -4,6 +4,8 @@ import torch
 import csv
 import numpy as np
 
+import pandas as pd
+
 from loguru import logger
 from ultralytics import YOLO
 from tqdm import tqdm
@@ -21,6 +23,8 @@ from trackers.tracking_utils.timer import Timer
 
 from price_tag_recognition.undistort import DistortionCorrector, CAM_SETTINGS, CAM_DISTORT_COEFFS
 from price_tag_recognition.image_processing import detect_qr_code, extract_qr_code, post_processing
+
+from price_tag_recognition.parse_text import parse_text_column
 
 DEFAULT_CSV_PATH = "result.csv"
 DEFAULT_MAX_FRAMES = 100
@@ -378,6 +382,11 @@ def imageflow_demo(predictor, args):
                 qr.get("qr_code_data"),
                 qr.get("qr_error")
             ])
+
+    df = pd.read_csv(output_csv)
+    df = df.apply(parse_text_column, axis=1)
+    df = df.drop(columns=["text"])
+    df.to_csv(output_csv, index=False)
 
     logger.info(f"CSV writing finished: {output_csv}, rows={len(texts)}")
 
