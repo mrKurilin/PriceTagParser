@@ -4,6 +4,10 @@ services:
     build:
       context: ..
       dockerfile: server/Dockerfile
+      args:
+        PRICE_TAG_RUNTIME_IMAGE: "${PRICE_TAG_RUNTIME_IMAGE:-eclipse-temurin:21-jre-noble}"
+        PYTORCH_INDEX_URL: "${PYTORCH_INDEX_URL:-}"
+        PYTORCH_EXPECT_CUDA: "${PYTORCH_EXPECT_CUDA:-false}"
     ports:
       - "8080:8080"
     environment:

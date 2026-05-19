@@ -28,6 +28,104 @@ FRAME_LOG_INTERVAL = 20
 VLM_BATCH_SIZE = 1
 DETECTION_COLUMNS = 5
 CSV_HEADER = ["id", "text", "qr_code_data", "qr_error"]
+CUDA_VISIBLE_DEVICES_ENV = "CUDA_VISIBLE_DEVICES"
+NVIDIA_VISIBLE_DEVICES_ENV = "NVIDIA_VISIBLE_DEVICES"
+NO_VISIBLE_GPU_VALUES = {"", "-1", "none", "void"}
+CUDA_REASON_SEPARATOR = " | "
+UNKNOWN_CUDA_DEVICE_NAME = "unknown"
+PYTORCH_INSTALL_HINT = (
+    "CPU fallback is allowed. If NVIDIA CUDA is expected in Docker, build with a CUDA-capable runtime "
+    "image and PYTORCH_INDEX_URL=https://download.pytorch.org/whl/cu124. For CPU-only builds, leave "
+    "PYTORCH_INDEX_URL empty so pip can select compatible default wheels."
+)
+CUDA_NOT_USED_HINT = (
+    "CPU fallback is allowed. If this machine is expected to use an NVIDIA GPU, check that the host has a "
+    "compatible NVIDIA driver, NVIDIA Container Toolkit is installed for Docker, the container was started "
+    "with GPU access (`docker run --gpus all` or optional Docker Compose GPU settings), and CUDA device "
+    "visibility is not restricted by environment variables."
+)
+
+
+def _env_hides_cuda_devices(env_name):
+    env_value = os.environ.get(env_name)
+    if env_value is None:
+        return None
+
+    if env_value.strip().lower() in NO_VISIBLE_GPU_VALUES:
+        return f"{env_name}={env_value!r} hides all GPUs."
+
+    return None
+
+
+def _probe_cuda_init_error():
+    try:
+        torch.cuda.init()
+    except Exception as exc:
+        return f"{type(exc).__name__}: {exc}"
+
+    return None
+
+
+def _get_first_cuda_device_name():
+    if torch.cuda.device_count() <= 0:
+        return UNKNOWN_CUDA_DEVICE_NAME
+
+    try:
+        return torch.cuda.get_device_name(0)
+    except Exception as exc:
+        return f"{UNKNOWN_CUDA_DEVICE_NAME} ({type(exc).__name__}: {exc})"
+
+
+def get_cuda_unavailable_reasons():
+    reasons = []
+    cuda_build = torch.version.cuda
+    cuda_backend_built = torch.backends.cuda.is_built()
+    device_count = torch.cuda.device_count()
+
+    if not cuda_backend_built or cuda_build is None:
+        reasons.append(
+            f"PyTorch is not built with CUDA: torch={torch.__version__}, "
+            f"torch.version.cuda={cuda_build}. {PYTORCH_INSTALL_HINT}"
+        )
+
+    if device_count == 0:
+        reasons.append(
+            f"No CUDA devices are visible to PyTorch: torch.cuda.device_count()={device_count}. "
+            f"{CUDA_NOT_USED_HINT}"
+        )
+    else:
+        reasons.append(
+            f"{device_count} CUDA device(s) are visible, but CUDA initialization still failed."
+        )
+
+    for env_name in (CUDA_VISIBLE_DEVICES_ENV, NVIDIA_VISIBLE_DEVICES_ENV):
+        env_reason = _env_hides_cuda_devices(env_name)
+        if env_reason:
+            reasons.append(env_reason)
+
+    init_error = _probe_cuda_init_error()
+    if init_error:
+        reasons.append(f"CUDA initialization error: {init_error}")
+
+    if not reasons:
+        reasons.append(f"Unknown CUDA availability problem. {CUDA_NOT_USED_HINT}")
+
+    return reasons
+
+
+def select_torch_device():
+    if torch.cuda.is_available():
+        logger.info(
+            f"CUDA is available: torch={torch.__version__}, cuda={torch.version.cuda}, "
+            f"devices={torch.cuda.device_count()}, first_device={_get_first_cuda_device_name()}"
+        )
+        return "cuda"
+
+    logger.warning(
+        "CUDA is not available; falling back to CPU. "
+        f"Reasons: {CUDA_REASON_SEPARATOR.join(get_cuda_unavailable_reasons())}"
+    )
+    return "cpu"
 
 
 def crop_quality(img):
@@ -323,7 +421,7 @@ def parse_qr_code(frame):
 
 
 def main(args):
-    args.device = "cuda" if torch.cuda.is_available() else "cpu"
+    args.device = select_torch_device()
     logger.info(
         f"Starting price tag recognition: video_path={args.video_path}, "
         f"csv_path={args.csv_path}, ckpt={args.ckpt}, device={args.device}"
