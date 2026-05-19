@@ -28,7 +28,7 @@ def initialize_vlm(device="cpu"):
     base_model = AutoModelForImageTextToText.from_pretrained(
         BASE_MODEL_ID,
         torch_dtype=torch.float16,
-        device_map="auto",
+        device_map={"": device},
         token=hf_token,
     )
 
