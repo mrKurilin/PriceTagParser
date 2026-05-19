@@ -14,8 +14,6 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.foundation.verticalScroll
@@ -27,7 +25,6 @@ import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
-import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -59,14 +56,6 @@ private val AppBackgroundGradient = Brush.verticalGradient(
         Color(0xFF0B5CAD),
         Color(0xFF57B7FF),
     ),
-)
-
-internal data class PricesFile(
-    val name: String,
-    val csvName: String,
-    val hasCsv: Boolean,
-    val uploadProgress: Int? = null,
-    val uploadFailed: Boolean = false,
 )
 
 @Composable
@@ -342,99 +331,6 @@ private fun RefreshProgressBar(progress: Float) {
     )
 }
 
-@Composable
-private fun BackendToggleCard(
-    status: BackendStatus,
-    isActionRunning: Boolean,
-    errorMessage: String?,
-    onEnabledChanged: (Boolean) -> Unit,
-) {
-    val isRunning = status.powerStatus == BackendPowerStatus.Running
-    val isChanging = isActionRunning ||
-            status.powerStatus == BackendPowerStatus.Starting ||
-            status.powerStatus == BackendPowerStatus.Stopping
-    val statusText = when (status.powerStatus) {
-        BackendPowerStatus.Running -> "Бэк включен"
-        BackendPowerStatus.Stopped -> "Бэк выключен"
-        BackendPowerStatus.Starting -> "Бэк запускается"
-        BackendPowerStatus.Stopping -> "Бэк останавливается"
-        BackendPowerStatus.Unknown -> "Статус бэка неизвестен"
-    }
-
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(20.dp),
-        colors = CardDefaults.cardColors(containerColor = Color.White),
-    ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(20.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.SpaceBetween,
-        ) {
-            Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    text = "Бэк обработки",
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.Bold,
-                )
-
-                Spacer(modifier = Modifier.height(4.dp))
-
-                Text(
-                    text = errorMessage ?: statusText,
-                    color = if (errorMessage == null) Color(0xFF5F6368) else MaterialTheme.colorScheme.error,
-                )
-            }
-
-            Spacer(modifier = Modifier.width(16.dp))
-
-            if (isChanging) {
-                CircularProgressIndicator(
-                    modifier = Modifier.size(28.dp),
-                    strokeWidth = 2.dp,
-                )
-            } else {
-                Switch(
-                    checked = isRunning,
-                    onCheckedChange = onEnabledChanged,
-                    enabled = status.powerStatus != BackendPowerStatus.Unknown,
-                )
-            }
-        }
-    }
-}
-
-@Composable
-private fun FilesCard(
-    modifier: Modifier = Modifier,
-    files: List<PricesFile>,
-    isLoading: Boolean,
-    errorMessage: String?,
-    onRetry: () -> Unit,
-) {
-    Card(
-        modifier = modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(24.dp),
-        colors = CardDefaults.cardColors(containerColor = Color.White),
-    ) {
-        when {
-            isLoading && files.isEmpty() -> LoadingState()
-            errorMessage != null && files.isEmpty() -> ErrorState(
-                message = errorMessage,
-                onRetry = onRetry,
-            )
-
-            files.isEmpty() -> EmptyState()
-            else -> FileList(
-                modifier = Modifier.fillMaxSize(),
-                files = files,
-            )
-        }
-    }
-}
-
 private fun startUpload(
     scope: CoroutineScope,
     onUploadingChanged: (Boolean) -> Unit,
@@ -596,24 +492,6 @@ private fun ProcessingLogList(
     }
 }
 
-@Composable
-private fun FileList(
-    files: List<PricesFile>,
-    modifier: Modifier = Modifier,
-) {
-    LazyColumn(
-        modifier = modifier.fillMaxWidth(),
-        verticalArrangement = Arrangement.spacedBy(12.dp),
-    ) {
-        itemsIndexed(files) { index, file ->
-            FileRow(
-                index = index + 1,
-                file = file,
-            )
-        }
-    }
-}
-
 @Suppress("unused")
 @Preview
 @Composable
@@ -645,122 +523,6 @@ private fun FileListPreview() {
         }
     }
 }
-
-@Composable
-private fun FileRow(index: Int, file: PricesFile) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 20.dp, vertical = 14.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.SpaceBetween,
-    ) {
-        FilePreviewIcon(fileName = file.name)
-
-        Spacer(modifier = Modifier.width(12.dp))
-
-        Text(
-            modifier = Modifier.weight(1f),
-            text = "$index. ${file.name}",
-            style = MaterialTheme.typography.titleMedium,
-            fontWeight = FontWeight.Medium,
-        )
-
-        Spacer(modifier = Modifier.width(16.dp))
-
-        when {
-            file.uploadFailed -> Text(
-                text = "Ошибка загрузки",
-                color = MaterialTheme.colorScheme.error,
-            )
-
-            file.uploadProgress != null -> Row(verticalAlignment = Alignment.CenterVertically) {
-                CircularProgressIndicator(
-                    modifier = Modifier.size(22.dp),
-                    strokeWidth = 2.dp,
-                )
-                Spacer(modifier = Modifier.width(8.dp))
-                Text("Загрузка ${file.uploadProgress}%")
-            }
-
-            file.hasCsv -> CompletedFileActions(file)
-
-            else -> {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    CircularProgressIndicator(
-                        modifier = Modifier.size(22.dp),
-                        strokeWidth = 2.dp,
-                    )
-
-                    Spacer(modifier = Modifier.width(8.dp))
-
-                    Text("Обработка")
-                }
-            }
-        }
-    }
-}
-
-@Composable
-private fun FilePreviewIcon(fileName: String) {
-    val extension = fileName.substringAfterLast('.', missingDelimiterValue = "").lowercase()
-    val isImage = extension in imageExtensions
-    val isVideo = extension in videoExtensions
-    val backgroundColor = when {
-        isImage -> Color(0xFFE8F5E9)
-        isVideo -> Color(0xFFE3F2FD)
-        else -> Color(0xFFF1F3F4)
-    }
-    val borderColor = when {
-        isImage -> Color(0xFF66BB6A)
-        isVideo -> Color(0xFF42A5F5)
-        else -> Color(0xFFB0BEC5)
-    }
-    val label = when {
-        isImage -> "IMG"
-        isVideo -> "VID"
-        else -> "FILE"
-    }
-
-    Box(
-        modifier = Modifier
-            .size(44.dp)
-            .background(
-                color = backgroundColor,
-                shape = RoundedCornerShape(12.dp),
-            )
-            .border(
-                width = 1.dp,
-                color = borderColor,
-                shape = RoundedCornerShape(12.dp),
-            ),
-        contentAlignment = Alignment.Center,
-    ) {
-        Text(
-            text = label,
-            style = MaterialTheme.typography.labelSmall,
-            color = borderColor,
-            fontWeight = FontWeight.Bold,
-        )
-    }
-}
-
-private val imageExtensions = setOf(
-    "jpg",
-    "jpeg",
-    "png",
-    "gif",
-    "webp",
-    "bmp",
-)
-
-private val videoExtensions = setOf(
-    "mp4",
-    "mov",
-    "avi",
-    "mkv",
-    "webm",
-)
 
 @Suppress("unused")
 @Preview
@@ -799,7 +561,7 @@ private fun ProcessingFileRowPreview() {
 }
 
 @Composable
-private fun LoadingState() {
+internal fun LoadingState() {
     Column(
         modifier = Modifier
             .fillMaxWidth()
@@ -813,7 +575,7 @@ private fun LoadingState() {
 }
 
 @Composable
-private fun ErrorState(message: String, onRetry: () -> Unit) {
+internal fun ErrorState(message: String, onRetry: () -> Unit) {
     Column(
         modifier = Modifier
             .fillMaxWidth()
@@ -828,13 +590,7 @@ private fun ErrorState(message: String, onRetry: () -> Unit) {
     }
 }
 
-@Composable
-private fun EmptyState() {
-    Text(
-        modifier = Modifier.padding(32.dp),
-        text = "В папке files пока нет файлов для обработки",
-    )
-}
+
 
 private fun CoroutineScope.launchSafely(
     onError: () -> Unit = {},
