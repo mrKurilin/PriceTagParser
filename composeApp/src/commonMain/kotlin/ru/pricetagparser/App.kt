@@ -82,6 +82,7 @@ private fun MainAppScreen() {
     var processingLogsErrorMessage by remember { mutableStateOf<String?>(null) }
     var refreshProgress by remember { mutableStateOf(0f) }
     val isBackendRunning = backendStatus.powerStatus == BackendPowerStatus.Running
+    val hasProcessingFile = files.any { it.isProcessing }
 
     Surface(
         modifier = Modifier
@@ -144,10 +145,29 @@ private fun MainAppScreen() {
                     },
                 )
 
+                Spacer(modifier = Modifier.height(12.dp))
+
+                ProcessingLogsCard(
+                    logs = processingLogs,
+                    isExpanded = isProcessingLogsExpanded,
+                    errorMessage = processingLogsErrorMessage,
+                    onToggle = { isProcessingLogsExpanded = !isProcessingLogsExpanded },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .then(
+                            if (isProcessingLogsExpanded) {
+                                Modifier.weight(LOGS_EXPANDED_WEIGHT)
+                            } else {
+                                Modifier
+                            },
+                        ),
+                )
+
                 Spacer(modifier = Modifier.height(16.dp))
 
                 UploadButton(
                     isUploading = isUploading,
+                    isEnabled = !hasProcessingFile,
                     onClick = {
                         startUpload(
                             scope = scope,
@@ -165,24 +185,6 @@ private fun MainAppScreen() {
                             onError = { errorMessage = "Не удалось загрузить файл" },
                         )
                     },
-                )
-
-                Spacer(modifier = Modifier.height(12.dp))
-
-                ProcessingLogsCard(
-                    logs = processingLogs,
-                    isExpanded = isProcessingLogsExpanded,
-                    errorMessage = processingLogsErrorMessage,
-                    onToggle = { isProcessingLogsExpanded = !isProcessingLogsExpanded },
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .then(
-                            if (isProcessingLogsExpanded) {
-                                Modifier.weight(LOGS_EXPANDED_WEIGHT)
-                            } else {
-                                Modifier
-                            },
-                        ),
                 )
             }
         }
@@ -210,6 +212,9 @@ private fun MainAppScreen() {
 
 private fun List<PricesFile>.replacingFile(file: PricesFile): List<PricesFile> =
     listOf(file) + filterNot { it.name == file.name }
+
+private val PricesFile.isProcessing: Boolean
+    get() = !hasCsv && uploadProgress == null && !uploadFailed
 
 private suspend fun loadFiles(
     onLoadingChanged: (Boolean) -> Unit,
@@ -392,11 +397,12 @@ private fun uploadFileState(
 private fun UploadButton(
     modifier: Modifier = Modifier,
     isUploading: Boolean,
+    isEnabled: Boolean,
     onClick: () -> Unit,
 ) {
     Button(
         modifier = modifier.height(48.dp),
-        enabled = !isUploading,
+        enabled = isEnabled && !isUploading,
         onClick = onClick,
     ) {
         if (isUploading) {
