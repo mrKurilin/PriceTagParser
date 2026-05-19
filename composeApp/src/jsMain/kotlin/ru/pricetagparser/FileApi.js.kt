@@ -33,7 +33,7 @@ internal actual suspend fun stopBackend(): BackendStatus = stopBackendViaApi()
 @Composable
 internal actual fun CompletedFileActions(file: PricesFile) {
     Button(onClick = { downloadCsv(file.name) }) {
-        Text("Скачать")
+        Text("Скачать результат (csv)")
     }
 }
 

@@ -43,6 +43,8 @@ internal fun BackendToggleCard(
     }
     val toggleDescription = "Переключатель при необходимости включает и выключает " +
             "виртуальную машину в Yandex Cloud, в целях экономии ресурсов."
+    val backendAvailabilityHint = "После запуска виртуальной машины бэкенд станет " +
+            "доступен через пару минут."
 
     Card(
         modifier = Modifier.fillMaxWidth(),
@@ -74,6 +76,14 @@ internal fun BackendToggleCard(
 
                 Text(
                     text = toggleDescription,
+                    color = Color(0xFF5F6368),
+                    style = MaterialTheme.typography.bodySmall,
+                )
+
+                Spacer(modifier = Modifier.height(4.dp))
+
+                Text(
+                    text = backendAvailabilityHint,
                     color = Color(0xFF5F6368),
                     style = MaterialTheme.typography.bodySmall,
                 )
