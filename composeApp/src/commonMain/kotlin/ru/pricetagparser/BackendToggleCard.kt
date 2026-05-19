@@ -45,7 +45,7 @@ internal fun BackendToggleCard(
     Card(
         modifier = Modifier.Companion.fillMaxWidth(),
         shape = RoundedCornerShape(20.dp),
-        colors = CardDefaults.cardColors(containerColor = Color.Companion.White),
+        colors = CardDefaults.cardColors(containerColor = TranslucentCardContainerColor),
     ) {
         Row(
             modifier = Modifier.Companion

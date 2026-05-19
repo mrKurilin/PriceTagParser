@@ -18,9 +18,9 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Card
+import androidx.compose.material3.Button
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.FilledIconButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
@@ -50,6 +50,7 @@ private const val REFRESH_INTERVAL_SECONDS = 6
 private const val REFRESH_PROGRESS_TICK_MILLIS = 1_000L
 private const val LOGS_EXPANDED_WEIGHT = 1.5f
 private const val APP_TITLE = "PriceTagParser"
+private const val UPLOAD_BUTTON_TEXT = "Загрузить файл"
 
 private val AppBackgroundGradient = Brush.verticalGradient(
     colors = listOf(
@@ -393,23 +394,19 @@ private fun UploadButton(
     isUploading: Boolean,
     onClick: () -> Unit,
 ) {
-    FilledIconButton(
-        modifier = modifier.size(64.dp),
+    Button(
+        modifier = modifier.height(48.dp),
         enabled = !isUploading,
         onClick = onClick,
     ) {
         if (isUploading) {
             CircularProgressIndicator(
-                modifier = Modifier.size(24.dp),
+                modifier = Modifier.size(20.dp),
                 strokeWidth = 2.dp,
                 color = MaterialTheme.colorScheme.onPrimary,
             )
         } else {
-            Text(
-                text = "+",
-                style = MaterialTheme.typography.headlineMedium,
-                fontWeight = FontWeight.Bold,
-            )
+            Text(text = UPLOAD_BUTTON_TEXT)
         }
     }
 }
@@ -425,7 +422,7 @@ private fun ProcessingLogsCard(
     Card(
         modifier = modifier,
         shape = RoundedCornerShape(20.dp),
-        colors = CardDefaults.cardColors(containerColor = Color.White),
+        colors = CardDefaults.cardColors(containerColor = TranslucentCardContainerColor),
     ) {
         Column(
             modifier = Modifier
