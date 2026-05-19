@@ -20,7 +20,7 @@ internal expect fun loadBackendInstanceId(): String
 
 internal expect fun loadYandexIamToken(): String
 
-private const val API_REQUEST_TIMEOUT_MILLIS = 15_000L
+private const val API_REQUEST_TIMEOUT_MILLIS = 5_000L
 
 private val apiHttpClient = HttpClient {
     install(HttpTimeout) {

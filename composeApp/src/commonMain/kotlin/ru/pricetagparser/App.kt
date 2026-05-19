@@ -47,6 +47,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
 private const val REFRESH_INTERVAL_SECONDS = 6
+private const val REFRESH_PROGRESS_TICK_MILLIS = 1_000L
 private const val LOGS_EXPANDED_WEIGHT = 1.5f
 private const val APP_TITLE = "PriceTagParser"
 
@@ -69,7 +70,7 @@ fun App() {
 private fun MainAppScreen() {
     val scope = rememberCoroutineScope()
     var files by remember { mutableStateOf(emptyList<PricesFile>()) }
-    var isLoading by remember { mutableStateOf(true) }
+    var isLoading by remember { mutableStateOf(false) }
     var isUploading by remember { mutableStateOf(false) }
     var errorMessage by remember { mutableStateOf<String?>(null) }
     var backendStatus by remember { mutableStateOf(BackendStatus(BackendPowerStatus.Unknown)) }
@@ -258,25 +259,40 @@ private suspend fun refreshData(
     onBackendErrorChanged: (String?) -> Unit,
     onProcessingLogsLoaded: (String) -> Unit,
     onProcessingLogsErrorChanged: (String?) -> Unit,
-) = coroutineScope {
-    launch {
-        loadBackendStatus(
-            onStatusChanged = onBackendStatusChanged,
-            onErrorChanged = onBackendErrorChanged,
-        )
+) {
+    var loadedBackendStatus = BackendStatus(BackendPowerStatus.Unknown)
+
+    loadBackendStatus(
+        onStatusChanged = { status ->
+            loadedBackendStatus = status
+            onBackendStatusChanged(status)
+        },
+        onErrorChanged = onBackendErrorChanged,
+    )
+
+    if (loadedBackendStatus.powerStatus != BackendPowerStatus.Running) {
+        onFilesLoadingChanged(false)
+        onFilesLoaded(emptyList())
+        onFilesErrorChanged(null)
+        onProcessingLogsLoaded("")
+        onProcessingLogsErrorChanged(null)
+        return
     }
-    launch {
-        loadFiles(
-            onLoadingChanged = onFilesLoadingChanged,
-            onFilesLoaded = onFilesLoaded,
-            onErrorChanged = onFilesErrorChanged,
-        )
-    }
-    launch {
-        loadProcessingLogs(
-            onLogsLoaded = onProcessingLogsLoaded,
-            onErrorChanged = onProcessingLogsErrorChanged,
-        )
+
+    coroutineScope {
+        launch {
+            loadFiles(
+                onLoadingChanged = onFilesLoadingChanged,
+                onFilesLoaded = onFilesLoaded,
+                onErrorChanged = onFilesErrorChanged,
+            )
+        }
+        launch {
+            loadProcessingLogs(
+                onLogsLoaded = onProcessingLogsLoaded,
+                onErrorChanged = onProcessingLogsErrorChanged,
+            )
+        }
     }
 }
 
@@ -288,7 +304,7 @@ private suspend fun runRefreshLoop(
     while (true) {
         repeat(REFRESH_INTERVAL_SECONDS) { second ->
             onProgressChanged(second.toFloat() / REFRESH_INTERVAL_SECONDS)
-            delay(1_000)
+            delay(REFRESH_PROGRESS_TICK_MILLIS)
         }
         onProgressChanged(1f)
         onRefresh()
