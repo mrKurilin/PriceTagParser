@@ -38,6 +38,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
@@ -48,11 +49,17 @@ import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
-private const val REFRESH_INTERVAL_SECONDS = 10
+private const val REFRESH_INTERVAL_SECONDS = 6
 private const val LOGS_EXPANDED_WEIGHT = 1.5f
 private const val APP_TITLE = "PriceTagParser"
 
-private val AppBackgroundColor = Color(0xFFF6F7FB)
+private val AppBackgroundGradient = Brush.verticalGradient(
+    colors = listOf(
+        Color(0xFF061B3A),
+        Color(0xFF0B5CAD),
+        Color(0xFF57B7FF),
+    ),
+)
 
 internal data class PricesFile(
     val name: String,
@@ -86,8 +93,10 @@ private fun MainAppScreen() {
     val isBackendRunning = backendStatus.powerStatus == BackendPowerStatus.Running
 
     Surface(
-        modifier = Modifier.fillMaxSize(),
-        color = AppBackgroundColor,
+        modifier = Modifier
+            .fillMaxSize()
+            .background(AppBackgroundGradient),
+        color = Color.Transparent,
     ) {
         Column(
             modifier = Modifier
@@ -99,6 +108,7 @@ private fun MainAppScreen() {
                 Text(
                     text = APP_TITLE,
                     style = MaterialTheme.typography.headlineLarge,
+                    color = Color.White,
                     fontWeight = FontWeight.Bold,
                 )
 
@@ -518,7 +528,7 @@ private fun ProcessingLogsCard(
             ) {
                 Text(
                     modifier = Modifier.weight(1f),
-                    text = "Логи обработки файлов",
+                    text = "Логи обработки файлов (актуальные сверху)",
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.Bold,
                 )
