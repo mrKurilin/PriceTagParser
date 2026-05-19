@@ -27,21 +27,26 @@ object PriceFileProcessor {
         val scriptFile = findScriptFile(sourceFile)
 
         log("Starting price file processing: source=${sourceFile.absolutePath}, expectedCsv=${outputFile.absolutePath}")
-        val process = ProcessBuilder(
-            scriptFile.absolutePath,
-            sourceFile.absolutePath,
-        )
-            .directory(scriptFile.parentFile)
-            .redirectErrorStream(true)
-            .start()
+        try {
+            val process = ProcessBuilder(
+                scriptFile.absolutePath,
+                sourceFile.absolutePath,
+            )
+                .directory(scriptFile.parentFile)
+                .redirectErrorStream(true)
+                .start()
 
-        val output = process.streamOutput()
-        val exitCode = process.waitFor()
-        check(exitCode == 0) { "Price file processing failed with exit code $exitCode: $output" }
-        check(outputFile.isFile) { "Price file processing did not create CSV: ${outputFile.absolutePath}. Output: $output" }
+            val output = process.streamOutput()
+            val exitCode = process.waitFor()
+            check(exitCode == 0) { "Price file processing failed with exit code $exitCode: $output" }
+            check(outputFile.isFile) { "Price file processing did not create CSV: ${outputFile.absolutePath}. Output: $output" }
 
-        log("Finished price file processing: csv=${outputFile.absolutePath}")
-        return outputFile
+            log("Price file processing completed successfully: csv=${outputFile.absolutePath}")
+            return outputFile
+        } catch (throwable: Throwable) {
+            log("Price file processing completed with error: source=${sourceFile.absolutePath}, error=${throwable.message}")
+            throw throwable
+        }
     }
 
     private fun findScriptFile(sourceFile: File): File {
