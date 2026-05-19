@@ -28,6 +28,8 @@ EXPOSE 8080
 WORKDIR /app
 
 ENV DEBIAN_FRONTEND=noninteractive \
+    CC=/usr/bin/gcc \
+    CXX=/usr/bin/g++ \
     VIRTUAL_ENV=/opt/price-tag-venv
 ENV PATH="$VIRTUAL_ENV/bin:$PATH"
 
@@ -43,6 +45,7 @@ RUN apt-get update \
         python3-pip \
         python3-venv \
         python-is-python3 \
+        build-essential \
         libgl1 \
         libglib2.0-0 \
         libsm6 \

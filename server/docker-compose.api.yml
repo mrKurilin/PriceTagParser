@@ -22,8 +22,15 @@ services:
       - APP_ROLE=api
       - SERVER_PORT=8080
       - PRICE_TAG_PARSER_SCRIPT=/app/generate_csv.sh
+      - HF_HOME=/app/huggingface-cache
+      - HF_HUB_CACHE=/app/huggingface-cache/hub
+      - TRANSFORMERS_CACHE=/app/huggingface-cache/transformers
       - NVIDIA_VISIBLE_DEVICES=all
       - NVIDIA_DRIVER_CAPABILITIES=compute,utility
     volumes:
       - ./files:/app/files
+      - huggingface-cache:/app/huggingface-cache
     restart: always
+
+volumes:
+  huggingface-cache:
