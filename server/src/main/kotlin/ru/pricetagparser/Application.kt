@@ -12,6 +12,10 @@ import io.ktor.server.application.install
 import io.ktor.server.engine.embeddedServer
 import io.ktor.server.http.content.LocalFileContent
 import io.ktor.server.netty.Netty
+import io.ktor.server.plugins.compression.Compression
+import io.ktor.server.plugins.compression.deflate
+import io.ktor.server.plugins.compression.gzip
+import io.ktor.server.plugins.compression.minimumSize
 import io.ktor.server.plugins.cors.routing.CORS
 import io.ktor.server.request.header
 import io.ktor.server.request.receiveMultipart
@@ -63,6 +67,15 @@ fun Application.module() {
     filesDirectory.mkdirs()
     PriceFileProcessor.configureLogFile(processingLogsFile)
     println("[Server] started: role=$appRole, filesDirectory=${filesDirectory.absolutePath}, webDirectory=${webDirectory.absolutePath}")
+
+    install(Compression) {
+        gzip {
+            minimumSize(1024)
+        }
+        deflate {
+            minimumSize(1024)
+        }
+    }
 
     install(CORS) {
         anyHost()
