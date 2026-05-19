@@ -31,7 +31,12 @@ DEFAULT_MAX_FRAMES = 100
 FRAME_LOG_INTERVAL = 20
 VLM_BATCH_SIZE = 1
 DETECTION_COLUMNS = 5
-CSV_HEADER = ["id", "text", "qr_code_data", "qr_error"]
+CSV_HEADER = [
+    "filename", "id", 
+    "text", "qr_code_data", "qr_error",
+    "x_min", "y_min", "x_max", "y_max",
+    "frame_timestamp"
+]
 CUDA_VISIBLE_DEVICES_ENV = "CUDA_VISIBLE_DEVICES"
 NVIDIA_VISIBLE_DEVICES_ENV = "NVIDIA_VISIBLE_DEVICES"
 NO_VISIBLE_GPU_VALUES = {"", "-1", "none", "void"}
@@ -214,6 +219,7 @@ def get_hw_after_rotation(video_path):
     return frame.shape[0], frame.shape[1]
 
 def imageflow_demo(predictor, args):
+    video_filename = os.path.basename(args.video_path)
 
     cap = cv2.VideoCapture(args.video_path)
     if not cap.isOpened():
@@ -248,7 +254,7 @@ def imageflow_demo(predictor, args):
         use_byte=args.use_byte
     )
 
-    best_crops = {}  # {id: (quality, crop)}
+    best_crops = {}  # {id: {"quality": ..., "crop": ..., "bbox": ..., "timestamp_ms": ...}}
 
     distCorrector = DistortionCorrector(CAM_SETTINGS, CAM_DISTORT_COEFFS)
 
@@ -262,6 +268,7 @@ def imageflow_demo(predictor, args):
             break
             
         ret, frame = cap.read()
+        timestamp_ms = cap.get(cv2.CAP_PROP_POS_MSEC)
         if not ret:
             break
 
@@ -302,8 +309,13 @@ def imageflow_demo(predictor, args):
                 crop = frame[y1_:y2_, x1_:x2_]
                 q = crop_quality(crop)
 
-                if tid not in best_crops or q > best_crops[tid][0]:
-                    best_crops[tid] = (q, crop.copy())
+                if tid not in best_crops or q > best_crops[tid]["quality"]:
+                    best_crops[tid] = {
+                        "quality": q,
+                        "crop": crop.copy(),
+                        "bbox": (x1_, y1_, x2_, y2_),
+                        "timestamp_ms": timestamp_ms
+                    }
 
         timer.toc()
 
@@ -335,17 +347,22 @@ def imageflow_demo(predictor, args):
     ids = []
     images = []
     qr_results = []
+    coords_list = []
+    timestamps = []
 
     logger.info("Starting QR parsing for best crops")
-    for tid, (_, crop) in tqdm(best_crops.items(), desc="Processing crops and qrs"):
-        if crop is None:
-            continue
-        
-        if crop.shape[0] == 0 or crop.shape[1] == 0:
+
+    for tid, data in tqdm(best_crops.items(), desc="Processing crops and qrs"):
+        crop = data["crop"]
+
+        if crop is None or crop.shape[0] == 0 or crop.shape[1] == 0:
             continue
 
         ids.append(tid)
         images.append(crop)
+        coords_list.append(data["bbox"])
+        timestamps.append(data["timestamp_ms"])
+
         qr_results.append(parse_qr_code(crop))
 
     logger.info(f"QR parsing finished: valid_crops={len(images)}")
@@ -375,12 +392,17 @@ def imageflow_demo(predictor, args):
         writer = csv.writer(f)
         writer.writerow(CSV_HEADER)
 
-        for tid, text, qr in zip(ids, texts, qr_results):
+        for tid, text, qr, coords, ts in zip(ids, texts, qr_results, coords_list, timestamps):
+            x1, y1, x2, y2 = coords
+
             writer.writerow([
+                video_filename,
                 tid,
                 text,
                 qr.get("qr_code_data"),
-                qr.get("qr_error")
+                qr.get("qr_error"),
+                x1, y1, x2, y2,
+                int(ts)
             ])
 
     df = pd.read_csv(output_csv)
