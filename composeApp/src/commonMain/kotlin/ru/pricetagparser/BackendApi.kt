@@ -8,6 +8,7 @@ import io.ktor.client.request.get
 import io.ktor.client.request.header
 import io.ktor.client.request.post
 import io.ktor.client.statement.HttpResponse
+import io.ktor.client.statement.bodyAsText
 import io.ktor.http.isSuccess
 import io.ktor.serialization.kotlinx.json.json
 import kotlinx.serialization.Serializable
@@ -64,6 +65,10 @@ internal suspend fun fetchBackendFiles(): List<PricesFile> = apiHttpClient
             hasCsv = file.hasCsv,
         )
     }
+
+internal suspend fun fetchBackendProcessingLogs(): String = apiHttpClient
+    .get("$FILE_PROCESSING_API_BASE_URL$GET_LOGS_API_PATH")
+    .bodyAsText()
 
 internal suspend fun fetchBackendStatusViaApi(): BackendStatus = apiHttpClient
     .get("$backendControlApiBaseUrl$BACKEND_STATUS_API_PATH")

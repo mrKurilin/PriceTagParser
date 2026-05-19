@@ -48,6 +48,7 @@ private const val DEFAULT_FILES_DIR = "files"
 private const val PROJECT_SERVER_FILES_DIR = "server/files"
 private val appRole = System.getenv("APP_ROLE") ?: APP_ROLE_API
 private val filesDirectory = resolveFilesDirectory()
+private val processingLogsFile = filesDirectory.resolve(PRICE_FILE_PROCESSOR_LOG_FILE_NAME)
 private val webDirectory = File(System.getenv("WEB_DIR") ?: "web")
 private val processingScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 private val backendManager = YandexBackendManager()
@@ -60,6 +61,7 @@ fun main() {
 
 fun Application.module() {
     filesDirectory.mkdirs()
+    PriceFileProcessor.configureLogFile(processingLogsFile)
     println("[Server] started: role=$appRole, filesDirectory=${filesDirectory.absolutePath}, webDirectory=${webDirectory.absolutePath}")
 
     install(CORS) {
@@ -131,12 +133,23 @@ fun Application.module() {
             }
         }
 
-        get("/api/files") {
+        get(FILES_API_PATH) {
             val filesJson = filesDirectory.priceFilesJson()
-            println("[Server] GET /api/files: respond ${filesDirectory.uploadedFilesCount()} files, jsonLength=${filesJson.length}")
+            println("[Server] GET $FILES_API_PATH: respond ${filesDirectory.uploadedFilesCount()} files, jsonLength=${filesJson.length}")
             call.respondText(
                 text = filesJson,
                 contentType = ContentType.Application.Json,
+            )
+        }
+
+        get(GET_LOGS_API_PATH) {
+            val logs = withContext(Dispatchers.IO) {
+                PriceFileProcessor.readLogs()
+            }
+            println("[Server] GET $GET_LOGS_API_PATH: respond logLength=${logs.length}")
+            call.respondText(
+                text = logs,
+                contentType = ContentType.Text.Plain,
             )
         }
 
@@ -367,7 +380,7 @@ private fun File.expectedCsvFile(): File =
 private fun File.uploadedFilesCount(): Int =
     listFiles()
         .orEmpty()
-        .count { it.isFile && !it.extension.equals("csv", ignoreCase = true) }
+        .count { it.isUploadedSourceFile() }
 
 private fun File.priceFilesJson(): String {
     val csvNames = listFiles()
@@ -378,7 +391,7 @@ private fun File.priceFilesJson(): String {
 
     return listFiles()
         .orEmpty()
-        .filter { it.isFile && !it.extension.equals("csv", ignoreCase = true) }
+        .filter { it.isUploadedSourceFile() }
         .sortedBy { it.name.lowercase() }
         .joinToString(prefix = "[", postfix = "]") { file ->
             val csvName = "${file.nameWithoutExtension}.csv"
@@ -389,6 +402,11 @@ private fun File.priceFilesJson(): String {
                     "}"
         }
 }
+
+private fun File.isUploadedSourceFile(): Boolean =
+    isFile &&
+            name != PRICE_FILE_PROCESSOR_LOG_FILE_NAME &&
+            !extension.equals("csv", ignoreCase = true)
 
 private fun String.safeFileName(): String =
     File(this).name

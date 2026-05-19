@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -14,6 +15,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Card
@@ -36,6 +38,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
@@ -45,6 +48,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
 private const val REFRESH_INTERVAL_SECONDS = 10
+private const val LOGS_EXPANDED_HEIGHT_FRACTION = 0.5f
 private const val APP_TITLE = "PriceTagParser"
 
 private val AppBackgroundColor = Color(0xFFF6F7FB)
@@ -74,70 +78,69 @@ private fun MainAppScreen() {
     var backendStatus by remember { mutableStateOf(BackendStatus(BackendPowerStatus.Unknown)) }
     var isBackendActionRunning by remember { mutableStateOf(false) }
     var backendErrorMessage by remember { mutableStateOf<String?>(null) }
+    var processingLogs by remember { mutableStateOf("") }
+    var isProcessingLogsExpanded by remember { mutableStateOf(false) }
+    var processingLogsErrorMessage by remember { mutableStateOf<String?>(null) }
     var refreshProgress by remember { mutableStateOf(0f) }
 
     Surface(
         modifier = Modifier.fillMaxSize(),
         color = AppBackgroundColor,
     ) {
-        Box(
+        Column(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(24.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
         ) {
-            Column(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(bottom = 88.dp),
-                horizontalAlignment = Alignment.CenterHorizontally,
-            ) {
-                Text(
-                    text = APP_TITLE,
-                    style = MaterialTheme.typography.headlineLarge,
-                    fontWeight = FontWeight.Bold,
-                )
+            Text(
+                text = APP_TITLE,
+                style = MaterialTheme.typography.headlineLarge,
+                fontWeight = FontWeight.Bold,
+            )
 
-                Spacer(modifier = Modifier.height(16.dp))
+            Spacer(modifier = Modifier.height(16.dp))
 
-                RefreshProgressBar(progress = refreshProgress)
+            RefreshProgressBar(progress = refreshProgress)
 
-                Spacer(modifier = Modifier.height(16.dp))
+            Spacer(modifier = Modifier.height(16.dp))
 
-                BackendToggleCard(
-                    status = backendStatus,
-                    isActionRunning = isBackendActionRunning,
-                    errorMessage = backendErrorMessage,
-                    onEnabledChanged = { enabled ->
-                        changeBackendPower(
-                            scope = scope,
-                            enabled = enabled,
-                            onActionRunningChanged = { isBackendActionRunning = it },
-                            onErrorChanged = { backendErrorMessage = it },
-                            onStatusChanged = { backendStatus = it },
+            BackendToggleCard(
+                status = backendStatus,
+                isActionRunning = isBackendActionRunning,
+                errorMessage = backendErrorMessage,
+                onEnabledChanged = { enabled ->
+                    changeBackendPower(
+                        scope = scope,
+                        enabled = enabled,
+                        onActionRunningChanged = { isBackendActionRunning = it },
+                        onErrorChanged = { backendErrorMessage = it },
+                        onStatusChanged = { backendStatus = it },
+                    )
+                },
+            )
+
+            Spacer(modifier = Modifier.height(24.dp))
+
+            FilesCard(
+                modifier = Modifier.weight(1f),
+                files = files,
+                isLoading = isLoading,
+                errorMessage = errorMessage,
+                onRetry = {
+                    scope.launchSafely {
+                        loadFiles(
+                            onLoadingChanged = { isLoading = it },
+                            onFilesLoaded = { files = it },
+                            onErrorChanged = { errorMessage = it },
                         )
-                    },
-                )
+                    }
+                },
+            )
 
-                Spacer(modifier = Modifier.height(24.dp))
-
-                FilesCard(
-                    files = files,
-                    isLoading = isLoading,
-                    errorMessage = errorMessage,
-                    onRetry = {
-                        scope.launchSafely {
-                            loadFiles(
-                                onLoadingChanged = { isLoading = it },
-                                onFilesLoaded = { files = it },
-                                onErrorChanged = { errorMessage = it },
-                            )
-                        }
-                    },
-                )
-            }
+            Spacer(modifier = Modifier.height(16.dp))
 
             UploadButton(
-                modifier = Modifier.align(Alignment.BottomCenter),
                 isUploading = isUploading,
                 onClick = {
                     startUpload(
@@ -157,6 +160,24 @@ private fun MainAppScreen() {
                     )
                 },
             )
+
+            Spacer(modifier = Modifier.height(12.dp))
+
+            ProcessingLogsCard(
+                logs = processingLogs,
+                isExpanded = isProcessingLogsExpanded,
+                errorMessage = processingLogsErrorMessage,
+                onToggle = { isProcessingLogsExpanded = !isProcessingLogsExpanded },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .then(
+                        if (isProcessingLogsExpanded) {
+                            Modifier.fillMaxHeight(LOGS_EXPANDED_HEIGHT_FRACTION)
+                        } else {
+                            Modifier
+                        },
+                    ),
+            )
         }
     }
 
@@ -172,6 +193,8 @@ private fun MainAppScreen() {
                     onFilesErrorChanged = { errorMessage = it },
                     onBackendStatusChanged = { backendStatus = it },
                     onBackendErrorChanged = { backendErrorMessage = it },
+                    onProcessingLogsLoaded = { processingLogs = it },
+                    onProcessingLogsErrorChanged = { processingLogsErrorMessage = it },
                 )
             },
         )
@@ -197,6 +220,18 @@ private suspend fun loadFiles(
     }
 }
 
+private suspend fun loadProcessingLogs(
+    onLogsLoaded: (String) -> Unit,
+    onErrorChanged: (String?) -> Unit,
+) {
+    onErrorChanged(null)
+    try {
+        onLogsLoaded(fetchProcessingLogs())
+    } catch (_: Throwable) {
+        onErrorChanged("Не удалось загрузить логи обработки")
+    }
+}
+
 private suspend fun loadBackendStatus(
     onStatusChanged: (BackendStatus) -> Unit,
     onErrorChanged: (String?) -> Unit,
@@ -216,6 +251,8 @@ private suspend fun refreshData(
     onFilesErrorChanged: (String?) -> Unit,
     onBackendStatusChanged: (BackendStatus) -> Unit,
     onBackendErrorChanged: (String?) -> Unit,
+    onProcessingLogsLoaded: (String) -> Unit,
+    onProcessingLogsErrorChanged: (String?) -> Unit,
 ) = coroutineScope {
     launch {
         loadBackendStatus(
@@ -228,6 +265,12 @@ private suspend fun refreshData(
             onLoadingChanged = onFilesLoadingChanged,
             onFilesLoaded = onFilesLoaded,
             onErrorChanged = onFilesErrorChanged,
+        )
+    }
+    launch {
+        loadProcessingLogs(
+            onLogsLoaded = onProcessingLogsLoaded,
+            onErrorChanged = onProcessingLogsErrorChanged,
         )
     }
 }
@@ -349,13 +392,14 @@ private fun BackendToggleCard(
 
 @Composable
 private fun FilesCard(
+    modifier: Modifier = Modifier,
     files: List<PricesFile>,
     isLoading: Boolean,
     errorMessage: String?,
     onRetry: () -> Unit,
 ) {
     Card(
-        modifier = Modifier.fillMaxWidth(),
+        modifier = modifier.fillMaxWidth(),
         shape = RoundedCornerShape(24.dp),
         colors = CardDefaults.cardColors(containerColor = Color.White),
     ) {
@@ -367,7 +411,10 @@ private fun FilesCard(
             )
 
             files.isEmpty() -> EmptyState()
-            else -> FileList(files = files)
+            else -> FileList(
+                modifier = Modifier.fillMaxSize(),
+                files = files,
+            )
         }
     }
 }
@@ -440,9 +487,102 @@ private fun UploadButton(
 }
 
 @Composable
-private fun FileList(files: List<PricesFile>) {
+private fun ProcessingLogsCard(
+    logs: String,
+    isExpanded: Boolean,
+    errorMessage: String?,
+    onToggle: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Card(
+        modifier = modifier,
+        shape = RoundedCornerShape(20.dp),
+        colors = CardDefaults.cardColors(containerColor = Color.White),
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .then(if (isExpanded) Modifier.fillMaxSize() else Modifier)
+                .padding(16.dp),
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween,
+            ) {
+                Text(
+                    modifier = Modifier.weight(1f),
+                    text = "Логи обработки файлов",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold,
+                )
+
+                Spacer(modifier = Modifier.width(12.dp))
+
+                OutlinedButton(onClick = onToggle) {
+                    Text(if (isExpanded) "Скрыть" else "Показать")
+                }
+            }
+
+            if (isExpanded) {
+                Spacer(modifier = Modifier.height(12.dp))
+                when {
+                    errorMessage != null -> Text(
+                        text = errorMessage,
+                        color = MaterialTheme.colorScheme.error,
+                    )
+
+                    logs.isBlank() -> Text(
+                        text = "Логов пока нет",
+                        color = Color(0xFF5F6368),
+                    )
+
+                    else -> ProcessingLogList(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .weight(1f),
+                        logs = logs,
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun ProcessingLogList(
+    logs: String,
+    modifier: Modifier = Modifier,
+) {
+    val logLines = remember(logs) { logs.lines() }
+
     LazyColumn(
-        modifier = Modifier.fillMaxWidth(),
+        modifier = modifier
+            .background(
+                color = Color(0xFF101418),
+                shape = RoundedCornerShape(12.dp),
+            )
+            .padding(12.dp),
+        verticalArrangement = Arrangement.spacedBy(4.dp),
+    ) {
+        items(logLines) { line ->
+            Text(
+                text = line,
+                style = MaterialTheme.typography.bodySmall,
+                color = Color(0xFFE8EAED),
+                fontFamily = FontFamily.Monospace,
+            )
+        }
+    }
+}
+
+@Composable
+private fun FileList(
+    files: List<PricesFile>,
+    modifier: Modifier = Modifier,
+) {
+    LazyColumn(
+        modifier = modifier.fillMaxWidth(),
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
         itemsIndexed(files) { index, file ->
@@ -690,6 +830,8 @@ private fun CoroutineScope.launchSafely(
 }
 
 internal expect suspend fun fetchFiles(): List<PricesFile>
+
+internal expect suspend fun fetchProcessingLogs(): String
 
 internal expect suspend fun fetchBackendStatus(): BackendStatus
 

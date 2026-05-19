@@ -18,6 +18,7 @@ import java.awt.Frame
 import java.io.File
 
 private val filesDirectory = File("files")
+private val processingLogsFile = filesDirectory.resolve(PRICE_FILE_PROCESSOR_LOG_FILE_NAME)
 
 internal actual val backendControlApiBaseUrl: String = ""
 
@@ -31,7 +32,7 @@ internal actual suspend fun fetchFiles(): List<PricesFile> = withContext(Dispatc
 
     filesDirectory.listFiles()
         .orEmpty()
-        .filter { it.isFile && !it.extension.equals("csv", ignoreCase = true) }
+        .filter { it.isUploadedSourceFile() }
         .sortedBy { it.name.lowercase() }
         .map { file ->
             PricesFile(
@@ -40,6 +41,12 @@ internal actual suspend fun fetchFiles(): List<PricesFile> = withContext(Dispatc
                 hasCsv = file.nameWithoutExtension in csvNames,
             )
         }
+}
+
+internal actual suspend fun fetchProcessingLogs(): String = withContext(Dispatchers.IO) {
+    filesDirectory.mkdirs()
+    PriceFileProcessor.configureLogFile(processingLogsFile)
+    if (processingLogsFile.isFile) processingLogsFile.readText() else ""
 }
 
 internal actual fun loadBackendInstanceId(): String = loadYandexEnvironment().instanceId
@@ -99,11 +106,17 @@ internal actual fun pickAndUploadFile(
             onProgress = { progress -> onUploadProgress(fileName, progress) },
         )
         scope.launch(Dispatchers.IO) {
+            PriceFileProcessor.configureLogFile(processingLogsFile)
             PriceFileProcessor.process(targetFile)
         }
         onUploaded(fileName)
     }
 }
+
+private fun File.isUploadedSourceFile(): Boolean =
+    isFile &&
+            name != PRICE_FILE_PROCESSOR_LOG_FILE_NAME &&
+            !extension.equals("csv", ignoreCase = true)
 
 private fun openCsvFile(fileName: String) {
     val csvFile = csvFileFor(fileName)

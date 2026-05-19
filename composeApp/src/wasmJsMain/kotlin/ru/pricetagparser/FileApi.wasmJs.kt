@@ -23,6 +23,8 @@ internal actual fun loadYandexIamToken(): String = ""
 
 internal actual suspend fun fetchFiles(): List<PricesFile> = fetchBackendFiles()
 
+internal actual suspend fun fetchProcessingLogs(): String = fetchBackendProcessingLogs()
+
 internal actual suspend fun fetchBackendStatus(): BackendStatus = fetchBackendStatusViaApi()
 
 internal actual suspend fun startBackend(): BackendStatus = startBackendViaApi()
