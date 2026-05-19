@@ -1,6 +1,8 @@
 package ru.pricetagparser
 
+import java.io.Closeable
 import java.io.File
+import java.util.concurrent.TimeUnit
 
 object PriceFileProcessor {
 
@@ -27,14 +29,16 @@ object PriceFileProcessor {
         val scriptFile = findScriptFile(sourceFile)
 
         log("Starting price file processing: source=${sourceFile.absolutePath}, expectedCsv=${outputFile.absolutePath}")
+        var process: Process? = null
         try {
-            val process = ProcessBuilder(
+            process = ProcessBuilder(
                 scriptFile.absolutePath,
                 sourceFile.absolutePath,
             )
                 .directory(scriptFile.parentFile)
                 .redirectErrorStream(true)
                 .start()
+                .also { it.outputStream.closeQuietly("process stdin") }
 
             val output = process.streamOutput()
             val exitCode = process.waitFor()
@@ -44,8 +48,11 @@ object PriceFileProcessor {
             log("Price file processing completed successfully: csv=${outputFile.absolutePath}")
             return outputFile
         } catch (throwable: Throwable) {
+            process?.destroyIfAlive()
             log("Price file processing completed with error: source=${sourceFile.absolutePath}, error=${throwable.message}")
             throw throwable
+        } finally {
+            process?.closeStreams()
         }
     }
 
@@ -77,6 +84,34 @@ object PriceFileProcessor {
             }
         }
         return recentOutput.joinToString(System.lineSeparator())
+    }
+
+    private fun Process.destroyIfAlive() {
+        if (!isAlive) return
+
+        destroy()
+        try {
+            if (!waitFor(PROCESS_TERMINATION_TIMEOUT_MILLIS, TimeUnit.MILLISECONDS) && isAlive) {
+                destroyForcibly()
+                waitFor(PROCESS_TERMINATION_TIMEOUT_MILLIS, TimeUnit.MILLISECONDS)
+            }
+        } catch (_: InterruptedException) {
+            destroyForcibly()
+            Thread.currentThread().interrupt()
+        }
+    }
+
+    private fun Process.closeStreams() {
+        inputStream.closeQuietly("process stdout")
+        outputStream.closeQuietly("process stdin")
+        errorStream.closeQuietly("process stderr")
+    }
+
+    private fun Closeable.closeQuietly(resourceName: String) {
+        runCatching { close() }
+            .onFailure { throwable ->
+                log("Failed to close $resourceName: ${throwable.message}")
+            }
     }
 
     @Synchronized
@@ -111,6 +146,7 @@ object PriceFileProcessor {
     }
 
     private const val PROCESS_OUTPUT_TAIL_LINES = 200
+    private const val PROCESS_TERMINATION_TIMEOUT_MILLIS = 5_000L
     private const val LOG_PREFIX = "[price-file-processor]"
     private const val LOG_PATH_ENV = "PRICE_FILE_PROCESSOR_LOG"
     private const val SCRIPT_NAME = "generate_csv.sh"

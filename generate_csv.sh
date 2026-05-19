@@ -1,9 +1,23 @@
 #!/bin/sh
 set -eu
 
+recognition_pid=
+
 log() {
     printf '%s [price-tag-processing] %s\n' "$(date '+%Y-%m-%dT%H:%M:%S%z')" "$*"
 }
+
+stop_recognition() {
+    if [ -n "$recognition_pid" ]; then
+        kill "$recognition_pid" 2>/dev/null || true
+        wait "$recognition_pid" 2>/dev/null || true
+        recognition_pid=
+    fi
+}
+
+trap 'stop_recognition; exit 129' HUP
+trap 'stop_recognition; exit 130' INT
+trap 'stop_recognition; exit 143' TERM
 
 if [ "$#" -ne 1 ]; then
     echo "Usage: $0 <source-file>" >&2
@@ -64,8 +78,23 @@ fi
 log "Starting ML/CV recognition"
 (
     cd "$recognition_dir"
-    PYTHONUNBUFFERED=1 "$python_bin" "$@"
-)
+    PYTHONUNBUFFERED=1
+    export PYTHONUNBUFFERED
+    exec "$python_bin" "$@"
+) &
+recognition_pid=$!
+
+set +e
+wait "$recognition_pid"
+recognition_status=$?
+set -e
+recognition_pid=
+
+if [ "$recognition_status" -ne 0 ]; then
+    log "ML/CV recognition command failed with exit code $recognition_status"
+    exit "$recognition_status"
+fi
+
 log "ML/CV recognition command finished"
 
 if [ ! -f "$output_file" ]; then

@@ -197,44 +197,50 @@ fun Application.module() {
             var uploadedFileName = ""
             var uploadTooLarge = false
             call.receiveMultipart(formFieldLimit = MAX_UPLOAD_SIZE_BYTES).forEachPart { part ->
-                when (part) {
-                    is PartData.FileItem -> {
-                        val originalFileName = part.originalFileName.orEmpty()
-                        val fileName = originalFileName.safeFileName()
-                        println("[Server] POST /api/upload: file part originalName=$originalFileName, safeName=$fileName")
-                        if (fileName.isNotBlank()) {
-                            val targetFile = filesDirectory.resolve(fileName)
-                            val expectedCsvFile = targetFile.expectedCsvFile()
-                            try {
-                                targetFile.outputStream().use { output ->
-                                    part.provider().copyToWithLimit(output, MAX_UPLOAD_SIZE_BYTES)
+                try {
+                    when (part) {
+                        is PartData.FileItem -> {
+                            val originalFileName = part.originalFileName.orEmpty()
+                            val fileName = originalFileName.safeFileName()
+                            println("[Server] POST /api/upload: file part originalName=$originalFileName, safeName=$fileName")
+                            if (fileName.isNotBlank()) {
+                                val targetFile = filesDirectory.resolve(fileName)
+                                val expectedCsvFile = targetFile.expectedCsvFile()
+                                try {
+                                    targetFile.outputStream().use { output ->
+                                        part.provider().copyToWithLimit(output, MAX_UPLOAD_SIZE_BYTES)
+                                    }
+                                    if (expectedCsvFile.exists()) {
+                                        check(expectedCsvFile.delete()) { "Could not delete stale CSV: ${expectedCsvFile.absolutePath}" }
+                                        println("[Server] POST /api/upload: deleted stale csv=${expectedCsvFile.absolutePath}")
+                                    }
+                                    uploadedFileName = fileName
+                                    processingScope.launch {
+                                        processUploadedFile(targetFile, expectedCsvFile)
+                                    }
+                                    println("[Server] POST /api/upload: saved file=${targetFile.absolutePath}, expectedCsv=${expectedCsvFile.absolutePath}, size=${targetFile.length()}")
+                                } catch (_: UploadTooLargeException) {
+                                    uploadTooLarge = true
+                                    targetFile.delete()
+                                    println("[Server] POST /api/upload: file too large, deleted partial file=${targetFile.absolutePath}")
+                                } catch (throwable: Throwable) {
+                                    targetFile.delete()
+                                    println("[Server] POST /api/upload: save failed for ${targetFile.absolutePath}: ${throwable.message}")
+                                    throw throwable
                                 }
-                                if (expectedCsvFile.exists()) {
-                                    check(expectedCsvFile.delete()) { "Could not delete stale CSV: ${expectedCsvFile.absolutePath}" }
-                                    println("[Server] POST /api/upload: deleted stale csv=${expectedCsvFile.absolutePath}")
-                                }
-                                uploadedFileName = fileName
-                                processingScope.launch {
-                                    processUploadedFile(targetFile, expectedCsvFile)
-                                }
-                                println("[Server] POST /api/upload: saved file=${targetFile.absolutePath}, expectedCsv=${expectedCsvFile.absolutePath}, size=${targetFile.length()}")
-                            } catch (_: UploadTooLargeException) {
-                                uploadTooLarge = true
-                                targetFile.delete()
-                                println("[Server] POST /api/upload: file too large, deleted partial file=${targetFile.absolutePath}")
-                            } catch (throwable: Throwable) {
-                                targetFile.delete()
-                                println("[Server] POST /api/upload: save failed for ${targetFile.absolutePath}: ${throwable.message}")
-                                throw throwable
+                            } else {
+                                println("[Server] POST /api/upload: skip file part because filename is blank")
                             }
-                        } else {
-                            println("[Server] POST /api/upload: skip file part because filename is blank")
                         }
-                    }
 
-                    else -> println("[Server] POST /api/upload: non-file multipart part type=${part::class.simpleName}")
+                        else -> println("[Server] POST /api/upload: non-file multipart part type=${part::class.simpleName}")
+                    }
+                } finally {
+                    runCatching { part.dispose() }
+                        .onFailure { throwable ->
+                            println("[Server] POST /api/upload: failed to dispose multipart part: ${throwable.message}")
+                        }
                 }
-                part.dispose()
             }
 
             if (uploadTooLarge) {
