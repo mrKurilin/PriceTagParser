@@ -36,7 +36,8 @@ ENV PATH="$VIRTUAL_ENV/bin:$PATH"
 ARG PYTORCH_INDEX_URL=
 ARG PYTORCH_EXPECT_CUDA=false
 
-RUN apt-get update \
+RUN --mount=type=cache,id=pricetagparser-pip-cache,target=/root/.cache/pip,sharing=locked \
+    apt-get update \
     && java_packages="" \
     && if ! command -v java >/dev/null 2>&1; then java_packages="openjdk-21-jre-headless"; fi \
     && apt-get install -y --no-install-recommends \
@@ -54,21 +55,23 @@ RUN apt-get update \
         git-lfs \
     && rm -rf /var/lib/apt/lists/* \
     && python3 -m venv "$VIRTUAL_ENV" \
-    && pip install --no-cache-dir --upgrade pip setuptools wheel
+    && pip install --upgrade pip setuptools wheel
 
 # Keep PyTorch installation configurable across CUDA and CPU-only machines.
 # For CUDA builds set PYTORCH_INDEX_URL to a matching wheel index, e.g. https://download.pytorch.org/whl/cu124.
-RUN if [ -n "$PYTORCH_INDEX_URL" ]; then \
-        pip install --no-cache-dir --upgrade torch torchvision torchaudio --index-url "$PYTORCH_INDEX_URL"; \
+RUN --mount=type=cache,id=pricetagparser-pip-cache,target=/root/.cache/pip,sharing=locked \
+    if [ -n "$PYTORCH_INDEX_URL" ]; then \
+        pip install --upgrade torch torchvision torchaudio --index-url "$PYTORCH_INDEX_URL"; \
     elif python -c "import torch, torchvision, torchaudio" >/dev/null 2>&1; then \
         echo "Using preinstalled PyTorch packages"; \
     else \
-        pip install --no-cache-dir torch torchvision torchaudio; \
+        pip install torch torchvision torchaudio; \
     fi; \
     PYTORCH_EXPECT_CUDA="$PYTORCH_EXPECT_CUDA" python -c "import os, torch, torchvision, torchaudio; expect_cuda = os.environ.get('PYTORCH_EXPECT_CUDA', 'false').lower() in ('1', 'true', 'yes'); print(f'Installed PyTorch {torch.__version__} with CUDA {torch.version.cuda}; torchvision {torchvision.__version__}; torchaudio {torchaudio.__version__}'); assert not expect_cuda or torch.version.cuda is not None, 'Installed PyTorch is CPU-only while PYTORCH_EXPECT_CUDA=true'"
 
 COPY priceTagRecognition/requirements.txt /app/priceTagRecognition/requirements.txt
-RUN pip install --no-cache-dir -r /app/priceTagRecognition/requirements.txt
+RUN --mount=type=cache,id=pricetagparser-pip-cache,target=/root/.cache/pip,sharing=locked \
+    pip install -r /app/priceTagRecognition/requirements.txt
 
 COPY --from=build /workspace/server/build/libs/fat.jar /app/app.jar
 COPY --from=build /workspace/generate_csv.sh /app/generate_csv.sh
