@@ -1,4 +1,5 @@
 import json
+import os
 import torch
 import requests
 from price_tag_recognition.parse_json import extract_json
@@ -8,23 +9,34 @@ from PIL import Image
 from tqdm import tqdm
 import numpy as np
 
+HF_TOKEN_ENV = "HF_TOKEN"
+BASE_MODEL_ID = "Qwen/Qwen3-VL-8B-Instruct"
+LORA_MODEL_ID = "openfoodfacts/price-tag-extractor"
+PROMPT_CONFIG_URL = "https://huggingface.co/datasets/openfoodfacts/price-tag-extraction/resolve/v1.1/config.json"
+REQUEST_TIMEOUT_SECONDS = 30
+
+
+def get_hf_token():
+    return os.environ.get(HF_TOKEN_ENV) or None
+
 
 def initialize_vlm(device="cpu"):
-    base_id = "Qwen/Qwen3-VL-8B-Instruct"
-    lora_id = "openfoodfacts/price-tag-extractor"
+    hf_token = get_hf_token()
 
-    processor = AutoProcessor.from_pretrained(base_id)
+    processor = AutoProcessor.from_pretrained(BASE_MODEL_ID, token=hf_token)
 
     base_model = AutoModelForImageTextToText.from_pretrained(
-        base_id, 
-        torch_dtype=torch.float16, 
+        BASE_MODEL_ID,
+        torch_dtype=torch.float16,
         device_map="auto",
+        token=hf_token,
     )
 
     model = PeftModel.from_pretrained(
         model=base_model,
-        model_id=lora_id,
-        autocast_adapter_dtype=False
+        model_id=LORA_MODEL_ID,
+        autocast_adapter_dtype=False,
+        token=hf_token,
     )
     model.eval()
 
@@ -32,8 +44,15 @@ def initialize_vlm(device="cpu"):
 
 
 def get_prompt():
+    headers = {}
+    hf_token = get_hf_token()
+    if hf_token:
+        headers["Authorization"] = f"Bearer {hf_token}"
+
     config = requests.get(
-        "https://huggingface.co/datasets/openfoodfacts/price-tag-extraction/resolve/v1.1/config.json",
+        PROMPT_CONFIG_URL,
+        headers=headers,
+        timeout=REQUEST_TIMEOUT_SECONDS,
     ).json()
     json_schema = config["json_schema"]
     instructions = config["instructions"]
