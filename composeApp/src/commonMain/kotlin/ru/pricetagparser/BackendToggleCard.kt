@@ -35,45 +35,55 @@ internal fun BackendToggleCard(
             status.powerStatus == BackendPowerStatus.Starting ||
             status.powerStatus == BackendPowerStatus.Stopping
     val statusText = when (status.powerStatus) {
-        BackendPowerStatus.Running -> "Бэк включен"
-        BackendPowerStatus.Stopped -> "Бэк выключен"
-        BackendPowerStatus.Starting -> "Бэк запускается"
-        BackendPowerStatus.Stopping -> "Бэк останавливается"
-        BackendPowerStatus.Unknown -> "Статус бэка неизвестен"
+        BackendPowerStatus.Running -> "Виртуальная машина включена"
+        BackendPowerStatus.Stopped -> "Виртуальная машина выключена"
+        BackendPowerStatus.Starting -> "Виртуальная машина запускается"
+        BackendPowerStatus.Stopping -> "Виртуальная машина останавливается"
+        BackendPowerStatus.Unknown -> "Статус виртуальной машины неизвестен"
     }
+    val toggleDescription = "Переключатель при необходимости включает и выключает " +
+            "виртуальную машину в Yandex Cloud, в целях экономии ресурсов."
 
     Card(
-        modifier = Modifier.Companion.fillMaxWidth(),
+        modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(20.dp),
         colors = CardDefaults.cardColors(containerColor = TranslucentCardContainerColor),
     ) {
         Row(
-            modifier = Modifier.Companion
+            modifier = Modifier
                 .fillMaxWidth()
                 .padding(20.dp),
-            verticalAlignment = Alignment.Companion.CenterVertically,
+            verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.SpaceBetween,
         ) {
-            Column(modifier = Modifier.Companion.weight(1f)) {
+            Column(modifier = Modifier.weight(1f)) {
                 Text(
-                    text = "Бэк обработки",
+                    text = "Виртуальная машина",
                     style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.Companion.Bold,
+                    fontWeight = FontWeight.Bold,
                 )
 
-                Spacer(modifier = Modifier.Companion.height(4.dp))
+                Spacer(modifier = Modifier.height(4.dp))
 
                 Text(
                     text = errorMessage ?: statusText,
                     color = if (errorMessage == null) Color(0xFF5F6368) else MaterialTheme.colorScheme.error,
                 )
+
+                Spacer(modifier = Modifier.height(4.dp))
+
+                Text(
+                    text = toggleDescription,
+                    color = Color(0xFF5F6368),
+                    style = MaterialTheme.typography.bodySmall,
+                )
             }
 
-            Spacer(modifier = Modifier.Companion.width(16.dp))
+            Spacer(modifier = Modifier.width(16.dp))
 
             if (isChanging) {
                 CircularProgressIndicator(
-                    modifier = Modifier.Companion.size(28.dp),
+                    modifier = Modifier.size(28.dp),
                     strokeWidth = 2.dp,
                 )
             } else {
