@@ -13,11 +13,9 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
@@ -39,7 +37,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.CoroutineScope
@@ -49,13 +46,8 @@ import kotlinx.coroutines.launch
 
 private const val REFRESH_INTERVAL_SECONDS = 10
 private const val APP_TITLE = "PriceTagParser"
-private const val WELCOME_TITLE = "Приветствуем"
-private const val WELCOME_SUBTITLE = "PriceTagParser — распознавание ценников из фото и видео."
-private const val WELCOME_START_BUTTON_TEXT = "Старт"
 
 private val AppBackgroundColor = Color(0xFFF6F7FB)
-private val WelcomeCardMaxWidth = 520.dp
-private val WelcomeSubtitleColor = Color(0xFF5F6368)
 
 internal data class PricesFile(
     val name: String,
@@ -68,66 +60,7 @@ internal data class PricesFile(
 @Composable
 fun App() {
     MaterialTheme {
-        var isMainScreenVisible by remember { mutableStateOf(false) }
-
-        if (isMainScreenVisible) {
-            MainAppScreen()
-        } else {
-            WelcomeScreen(onStart = { isMainScreenVisible = true })
-        }
-    }
-}
-
-@Composable
-private fun WelcomeScreen(
-    onStart: () -> Unit,
-) {
-    Surface(
-        modifier = Modifier.fillMaxSize(),
-        color = AppBackgroundColor,
-    ) {
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(24.dp),
-            contentAlignment = Alignment.Center,
-        ) {
-            Card(
-                modifier = Modifier
-                    .widthIn(max = WelcomeCardMaxWidth)
-                    .fillMaxWidth(),
-                shape = RoundedCornerShape(24.dp),
-                colors = CardDefaults.cardColors(containerColor = Color.White),
-            ) {
-                Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(32.dp),
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                ) {
-                    Text(
-                        text = WELCOME_TITLE,
-                        style = MaterialTheme.typography.headlineLarge,
-                        fontWeight = FontWeight.Bold,
-                        textAlign = TextAlign.Center,
-                    )
-
-                    Spacer(modifier = Modifier.height(16.dp))
-
-                    Text(
-                        text = WELCOME_SUBTITLE,
-                        color = WelcomeSubtitleColor,
-                        textAlign = TextAlign.Center,
-                    )
-
-                    Spacer(modifier = Modifier.height(24.dp))
-
-                    Button(onClick = onStart) {
-                        Text(text = WELCOME_START_BUTTON_TEXT)
-                    }
-                }
-            }
-        }
+        MainAppScreen()
     }
 }
 

@@ -33,7 +33,6 @@ kotlin {
             implementation(libs.ktor.clientCore)
             implementation(libs.ktor.clientContentNegotiation)
             implementation(libs.ktor.clientJson)
-            implementation(libs.ktor.clientLogging)
             implementation(libs.kotlinx.serializationJson)
             implementation(projects.shared)
         }

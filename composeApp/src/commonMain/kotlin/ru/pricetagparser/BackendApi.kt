@@ -4,8 +4,6 @@ import io.ktor.client.HttpClient
 import io.ktor.client.call.body
 import io.ktor.client.plugins.HttpTimeout
 import io.ktor.client.plugins.contentnegotiation.ContentNegotiation
-import io.ktor.client.plugins.logging.LogLevel
-import io.ktor.client.plugins.logging.Logging
 import io.ktor.client.request.get
 import io.ktor.client.request.header
 import io.ktor.client.request.post
@@ -36,10 +34,6 @@ private val apiHttpClient = HttpClient {
                 ignoreUnknownKeys = true
             },
         )
-    }
-
-    install(Logging) {
-        level = LogLevel.BODY
     }
 }
 
