@@ -129,7 +129,21 @@ object PriceFileProcessor {
     private fun appendLogLine(message: String) {
         val logFile = resolveLogFile()
         logFile.parentFile?.mkdirs()
-        logFile.appendText(message + System.lineSeparator())
+
+        val recentLines = ArrayDeque<String>()
+        if (logFile.isFile) {
+            logFile.useLines { lines ->
+                lines.forEach { line ->
+                    if (recentLines.size == MAX_LOG_LINES - 1) {
+                        recentLines.removeFirst()
+                    }
+                    recentLines.addLast(line)
+                }
+            }
+        }
+
+        recentLines.addLast(message)
+        logFile.writeText(recentLines.joinToString(System.lineSeparator(), postfix = System.lineSeparator()))
     }
 
     private fun resolveLogFile(): File = synchronized(logFileLock) {
@@ -147,6 +161,7 @@ object PriceFileProcessor {
 
     private const val PROCESS_OUTPUT_TAIL_LINES = 200
     private const val PROCESS_TERMINATION_TIMEOUT_MILLIS = 5_000L
+    private const val MAX_LOG_LINES = 2_000
     private const val LOG_PREFIX = "[price-file-processor]"
     private const val LOG_PATH_ENV = "PRICE_FILE_PROCESSOR_LOG"
     private const val SCRIPT_NAME = "generate_csv.sh"
