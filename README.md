@@ -1,95 +1,193 @@
-## 0. Общее описание
+## Что это
 
-`PriceTagParser` — решение для обработки фото и видео ценников из задачи Lenta Tech Life Hack.
+`PriceTagParser` — решение для обработки видео ценников из задачи Lenta Tech Life Hack.
 
-Приложение позволяет:
+Загружаешь видео → сервис распознаёт ценники через ML/CV → получаешь CSV с результатом.
 
-- **загружать файлы** с фото или видео ценников;
-- **отслеживать статус обработки**: загрузка, обработка, готовый CSV;
-- **получать CSV-файл** с результатом обработки;
-- **работать в двух режимах**:
-  - desktop-приложение на Compose Desktop;
-  - web-приложение с Ktor-сервером и Compose Multiplatform UI.
+### Режимы работы
 
-### Архитектура проекта
+- **Desktop** — Compose Desktop-приложение, запускается локально, не нужен сервер.
+- **REST API** — Ktor-сервер в Docker, принимает видео и отдаёт CSV через HTTP.
+- **Web UI** — Compose Web UI, работает поверх REST API в браузере.
+
+---
+
+## Архитектура
 
 - **`composeApp`** — общий Compose UI для web и desktop.
 - **`server`** — Ktor-сервер: принимает загрузки, хранит файлы, отдаёт список файлов и CSV.
 - **`shared`** — общая JVM-логика обработки файла для server и desktop.
-- **`files` / `server/files`** — папки с исходными файлами и сгенерированными CSV.
-- **`generate_csv.sh`** — скрипт обработки: создаёт CSV рядом с выбранным файлом с тем же базовым именем.
+- **`generate_csv.sh`** — оркестратор обработки: запускает `priceTagRecognition/price_tag_recognition/demo_track.py` и создаёт CSV рядом с исходным файлом.
+- **`priceTagRecognition`** — Python ML/CV модуль на PyTorch + YOLO.
 
 ### Логика обработки
 
-После загрузки или выбора файла приложение запускает общий обработчик `PriceFileProcessor`.
-Он вызывает `generate_csv.sh`, который создаёт файл вида:
+1. Файл сохраняется в папку `files` (для desktop) или `server/files` (для Docker).
+2. Запускается `generate_csv.sh <file>`, который вызывает Python-скрипт распознавания.
+3. Рядом с исходным файлом появляется CSV с тем же базовым именем:
+   - `example.mp4` → `example.csv`
+4. Пока CSV не появился — статус **«Обработка»**. Список обновляется каждые 10 секунд.
 
-- исходный файл: `example.mp4`
-- результат: `example.csv`
+---
 
-После выбора файла в web-приложении UI показывает статус **«Загрузка N%»** с прогрессом отправки файла на сервер. Прогресс считается на стороне браузера через `XMLHttpRequest.upload.onprogress` и отображается в общем Compose UI как **«Загрузка 0%» ... «Загрузка 100%»**.
+## Быстрый старт: Desktop
 
-После завершения загрузки запускается обработка файла. Пока CSV не появился, UI показывает статус **«Обработка»**. Список файлов автоматически обновляется каждые **10 секунд**, а верхний progress bar показывает время до следующего обновления.
-
-## 1. Инструкция по запуску локально desktop-версии
+Самый простой способ — запустить desktop-приложение локально.
 
 ### Требования
 
 - **JDK 21**
+- **Python 3** с установленными зависимостями из `priceTagRecognition/requirements.txt`
 - **macOS, Windows или Linux**
-- доступ к shell-скрипту `generate_csv.sh`
 
-### Команды desktop-версии
-
-Все команды выполняются из корня проекта:
+### Запуск
 
 ```shell
-# Запустить desktop-приложение на macOS/Linux
+# macOS / Linux
 ./gradlew :composeApp:run
 
-# Запустить desktop-приложение на Windows
+# Windows
 .\gradlew.bat :composeApp:run
-
-# Собрать desktop-дистрибутив для текущей ОС
-./gradlew :composeApp:packageDistributionForCurrentOS
 ```
 
 ### Как пользоваться
 
-1. Запустите desktop-приложение.
-2. Нажмите кнопку **`+`**.
-3. Выберите фото или видео файл.
-4. Файл будет скопирован в папку `files` в корне проекта.
-5. После загрузки файл перейдёт в статус **«Обработка»**.
-6. После появления CSV станут доступны кнопки:
-   - **«Открыть файл»** — открыть сгенерированный CSV;
+1. Нажми кнопку **`+`**.
+2. Выбери видео или фото файл.
+3. Файл скопируется в папку `files` в корне проекта.
+4. Статус изменится на **«Обработка»** — запустится `generate_csv.sh`.
+5. Когда CSV появится, станут активны кнопки:
+   - **«Открыть файл»** — открыть сгенерирова��ный CSV.
    - **«Открыть папку»** — открыть папку с CSV.
 
-Поддерживаемые desktop-форматы в проекте:
+### Собрать дистрибутив
 
-- **macOS**: `dmg`
-- **Windows**: `msi`
-- **Linux**: `deb`
+```shell
+./gradlew :composeApp:packageDistributionForCurrentOS
+```
 
-## 2. Инструкция по разворачиванию web-приложения и REST API на разных серверах
+Форматы: **macOS** → `dmg`, **Windows** → `msi`, **Linux** → `deb`.
+
+---
+
+## Быстрый старт: REST API в Docker
 
 ### Требования
 
-- **Docker**
-- **Docker Compose**
+- **Docker** и **Docker Compose**
+- Для CPU-сборки (без GPU): достаточно обычного Docker.
+- Для NVIDIA GPU: нужен Linux-хост с NVIDIA-драйвером и [NVIDIA Container Toolkit](https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/install-guide.html).
 
-Проект подготовлен для запуска на двух отдельных серверах:
+### Шаг 1: клонировать репозиторий
 
-- **сервер сайта** — отдаёт собранный Compose Web UI как статические файлы;
-- **сервер обработки** — запускает REST API на Ktor, хранит файлы и выполняет обработку через `generate_csv.sh`.
+```shell
+git clone <repo-url>
+cd PriceTagParser
+```
 
-### Запуск REST API сервера обработки
+### Шаг 2: создать `.env` (опционально, для управления Yandex Compute)
 
-Команды выполняются на сервере обработки из папки `server`.
+```shell
+# server/.env
+YANDEX_IAM_TOKEN=<iam-token>
+YANDEX_FOLDER_ID=<folder-id>
+YANDEX_INSTANCE_ID=<instance-id>
+```
 
-REST API compose настроен на NVIDIA GPU через `runtime: nvidia`: нужен Linux-хост с NVIDIA-драйвером, рабочим `nvidia-smi` и установленным NVIDIA Container Toolkit для Docker. `runtime: nvidia` используется вместо `gpus: all`, чтобы обойти Docker CDI ошибку `failed to discover GPU vendor from CDI: no known GPU vendor found`.
+Если Yandex Compute не нужен — файл можно не создавать.
 
-Перед запуском REST API передайте переменные для управления Yandex Compute в окружение Docker Compose:
+### Шаг 3: запустить сервер (всё в одном контейнере)
+
+```shell
+cd server
+
+# Запустить REST API + Web UI на порту 8080
+docker compose up --build
+
+# Или в фоне
+docker compose up --build -d
+```
+
+После старта:
+- REST API: `http://localhost:8080/api/files`
+- Web UI: `http://localhost:8080`
+
+### Шаг 4: загрузить видео
+
+```shell
+curl -X POST http://localhost:8080/api/upload \
+  -F "file=@/path/to/video.mp4"
+```
+
+Ответ:
+
+```json
+{"name":"video.mp4"}
+```
+
+### Шаг 5: проверить статус обработки
+
+```shell
+curl http://localhost:8080/api/files
+```
+
+Ответ (пример):
+
+```json
+[
+  {"name":"video.mp4","hasCsv":false},
+  {"name":"done.mp4","hasCsv":true}
+]
+```
+
+Пока `hasCsv: false` — идёт обработка. Повторяй запрос каждые 10 секунд.
+
+### Шаг 6: скачать CSV
+
+```shell
+curl -O http://localhost:8080/api/files/video.mp4/download
+```
+
+Файл `video.csv` будет сохра��ён в текущую папку.
+
+---
+
+## REST API: справочник эндпоинтов
+
+| Метод  | Путь                           | Описание                                              |
+|--------|--------------------------------|-------------------------------------------------------|
+| `POST` | `/api/upload`                  | Загрузить файл (multipart, поле `file`, макс. 500 МБ) |
+| `GET`  | `/api/files`                   | Список файлов и их статусов                           |
+| `GET`  | `/api/files/{name}/download`   | Скачать CSV для файла `{name}`                        |
+| `GET`  | `/api/getLogs`                 | Логи обработки (текстовый вывод `generate_csv.sh`)    |
+
+---
+
+## Пример полного цикла через curl
+
+```shell
+HOST=http://localhost:8080
+
+# 1. Загрузить видео
+curl -X POST "$HOST/api/upload" -F "file=@video.mp4"
+
+# 2. Ждать появления CSV (повторять до hasCsv: true)
+curl "$HOST/api/files"
+
+# 3. Посмотреть логи обработки
+curl "$HOST/api/getLogs"
+
+# 4. Скачать CSV (после завершения обработки)
+curl -O "$HOST/api/files/video.mp4/download"
+```
+
+---
+
+## Docker: два отдельных сервера (production)
+
+В production REST API и Web UI разворачиваются на разных машинах.
+
+### Сервер обработки (REST API, нужен NVIDIA GPU)
 
 ```shell
 cd server
@@ -97,113 +195,85 @@ cd server
 export YANDEX_IAM_TOKEN='<iam-token>'
 export YANDEX_FOLDER_ID='<folder-id>'
 export YANDEX_INSTANCE_ID='<instance-id>'
-```
 
-Или создайте файл `server/.env`:
-
-```shell
-YANDEX_IAM_TOKEN=<iam-token>
-YANDEX_FOLDER_ID=<folder-id>
-YANDEX_INSTANCE_ID=<instance-id>
-```
-
-```shell
-# Собрать и запустить REST API с NVIDIA visibility и CUDA 12.4 PyTorch wheels
+# Собрать и запустить REST API с CUDA 12.4 PyTorch wheels
 docker compose -f docker-compose.api.yml up --build
 
-# Запустить REST API в фоне
+# В фоне
 docker compose -f docker-compose.api.yml up --build -d
 
 # Проверить, что переменные попали в контейнер
 docker compose -f docker-compose.api.yml exec api printenv | grep -E 'YANDEX|NVIDIA'
 
-# Остановить REST API
+# Остановить
 docker compose -f docker-compose.api.yml down
 ```
 
-После старта REST API будет доступен по адресу:
+REST API будет доступен по `http://<api-server-host>:8080/api/files`.
 
-```text
-http://<api-server-host>:8080/api/files
-```
-
-### Запуск сервера сайта
-
-Команды выполняются на сервере сайта из папки `server`.
+### Сервер сайта (Web UI)
 
 ```shell
 cd server
 
-# Собрать и запустить сайт
-docker-compose -f docker-compose.site.yml up --build
+docker compose -f docker-compose.site.yml up --build
 
-# Или запустить сайт в фоне
-docker-compose -f docker-compose.site.yml up --build -d
+# В фоне
+docker compose -f docker-compose.site.yml up --build -d
 
-# Проверить состояние контейнера и логи
-docker-compose -f docker-compose.site.yml ps
-docker-compose -f docker-compose.site.yml logs site
-
-# Остановить сайт
-docker-compose -f docker-compose.site.yml down
+# Остановить
+docker compose -f docker-compose.site.yml down
 ```
 
-После старта сайт будет доступен по адресу:
-
-```text
-http://<site-server-host>:8081
-```
-
-Контейнер сайта запускает Ktor-сервер на внутреннем порту `8080` и отдаёт собранный Compose Web UI из `/app/web`. Внешний порт задаётся переменной `SITE_HOST_PORT`, по умолчанию используется `8081`.
-
-Web UI обращается к Ktor REST API напрямую через `Ktor Client`; на сервере обработки включён CORS для браузерных запросов.
+Web UI будет доступен по `http://<site-server-host>:8081`.
 
 ### Локальная проверка двух серверов на одной машине
 
-В двух разных терминалах из папки `server`:
-
 ```shell
 # Терминал 1: REST API
-API_HOST_PORT=8080 docker compose -f docker-compose.api.yml up --build
+cd server && API_HOST_PORT=8080 docker compose -f docker-compose.api.yml up --build
 
-# Терминал 2: сайт
-SITE_HOST_PORT=8081 docker compose -f docker-compose.site.yml up --build
+# Терминал 2: Web UI
+cd server && SITE_HOST_PORT=8081 docker compose -f docker-compose.site.yml up --build
 ```
 
-Откройте сайт:
+Открыть: `http://localhost:8081`.
 
-```text
-http://localhost:8081
-```
+---
 
-### Где хранятся файлы
+## Переменные окружения
 
-В `docker-compose.api.yml` папка `server/files` на сервере обработки подключается в контейнер как `/app/files`.
+### `docker-compose.yml` / `docker-compose.api.yml`
 
-Это значит:
+| Переменная                 | По умолчанию              | Описание                            |
+|----------------------------|---------------------------|-------------------------------------|
+| `API_HOST_PORT`            | `8080`                    | Порт REST API на хосте              |
+| `SERVER_PORT`              | `8080`                    | Порт Ktor внутри контейнера         |
+| `PRICE_TAG_PARSER_SCRIPT`  | `/app/generate_csv.sh`    | Путь к скрипту генерации CSV        |
+| `YANDEX_IAM_TOKEN`         | —                         | IAM-токен Yandex Cloud              |
+| `YANDEX_FOLDER_ID`         | —                         | Folder ID Yandex Cloud              |
+| `YANDEX_INSTANCE_ID`       | —                         | ID инстанса Yandex Compute          |
 
-- при выборе файла web UI показывает **«Загрузка N%»** до завершения отправки файла на REST API;
-- загруженные через web файлы сохраняются в `server/files` на сервере обработки;
-- CSV создаётся рядом с исходным файлом;
-- состояние **«Обработка»** определяется отсутствием CSV;
-- состояние готовности определяется наличием CSV с тем же базовым именем.
+### `docker-compose.site.yml`
 
-### Полезные переменные окружения
+| Переменная       | По умолчанию | Описание              |
+|------------------|--------------|-----------------------|
+| `SITE_HOST_PORT` | `8081`       | Порт Web UI на хосте  |
 
-В `server/docker-compose.api.yml` используются:
+---
 
-- **`API_HOST_PORT=8080`** — порт REST API на хосте;
-- **`SERVER_PORT=8080`** — порт Ktor REST API внутри контейнера;
-- **`PRICE_TAG_PARSER_SCRIPT=/app/generate_csv.sh`** — путь к скрипту генерации CSV внутри контейнера;
+## Где хранятся файлы
 
-В `server/docker-compose.site.yml` используется:
+- **Desktop**: папка `files/` в корне проекта.
+- **Docker**: папка `server/files/` монтируется в контейнер как `/app/files`.
 
-- **`SITE_HOST_PORT=8081`** — порт сайта на хосте.
+CSV создаётся рядом с исходным файлом в той же папке.
 
-### Проверка production-сборки без Docker
+---
 
-Из корня проекта можно собрать server fat jar и web UI:
+## Сборка без Docker
 
 ```shell
+# Собрать server fat jar и Compose Web UI
 ./gradlew :server:buildFatJar :composeApp:composeCompatibilityBrowserDistribution
 ```
