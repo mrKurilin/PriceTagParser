@@ -454,7 +454,16 @@ private fun ProcessingLogsCard(
             }
 
             if (isExpanded) {
+                Spacer(modifier = Modifier.height(8.dp))
+
+                Text(
+                    text = "Обработка видео длиной 30 секунд обычно занимает около 15 минут.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = Color(0xFF5F6368),
+                )
+
                 Spacer(modifier = Modifier.height(12.dp))
+
                 when {
                     errorMessage != null -> Text(
                         text = errorMessage,
