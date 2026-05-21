@@ -2,6 +2,7 @@ import json
 import os
 import torch
 import requests
+from loguru import logger
 from price_tag_recognition.parse_json import extract_json
 from transformers import AutoProcessor, AutoModelForImageTextToText
 from peft import PeftModel
@@ -10,6 +11,10 @@ from tqdm import tqdm
 import numpy as np
 
 HF_TOKEN_ENV = "HF_TOKEN"
+HF_HOME_ENV = "HF_HOME"
+HF_HUB_CACHE_ENV = "HF_HUB_CACHE"
+TRANSFORMERS_CACHE_ENV = "TRANSFORMERS_CACHE"
+DEFAULT_HF_CACHE_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), ".huggingface-cache")
 BASE_MODEL_ID = "Qwen/Qwen3-VL-8B-Instruct"
 LORA_MODEL_ID = "openfoodfacts/price-tag-extractor"
 PROMPT_CONFIG_URL = "https://huggingface.co/datasets/openfoodfacts/price-tag-extraction/resolve/v1.1/config.json"
@@ -20,14 +25,37 @@ def get_hf_token():
     return os.environ.get(HF_TOKEN_ENV) or None
 
 
+def get_hf_cache_dir():
+    return os.environ.get(HF_HOME_ENV) or DEFAULT_HF_CACHE_DIR
+
+
+def configure_hf_cache():
+    cache_dir = os.path.abspath(get_hf_cache_dir())
+    hub_cache_dir = os.environ.get(HF_HUB_CACHE_ENV) or os.path.join(cache_dir, "hub")
+    transformers_cache_dir = os.environ.get(TRANSFORMERS_CACHE_ENV) or os.path.join(cache_dir, "transformers")
+
+    os.environ.setdefault(HF_HOME_ENV, cache_dir)
+    os.environ.setdefault(HF_HUB_CACHE_ENV, hub_cache_dir)
+    os.environ.setdefault(TRANSFORMERS_CACHE_ENV, transformers_cache_dir)
+    os.makedirs(cache_dir, exist_ok=True)
+    logger.info(f"Using Hugging Face cache: {cache_dir}")
+    return cache_dir
+
+
 def initialize_vlm(device="cpu"):
     hf_token = get_hf_token()
+    cache_dir = configure_hf_cache()
 
-    processor = AutoProcessor.from_pretrained(BASE_MODEL_ID, token=hf_token)
+    processor = AutoProcessor.from_pretrained(
+        BASE_MODEL_ID,
+        cache_dir=cache_dir,
+        token=hf_token,
+    )
 
     base_model = AutoModelForImageTextToText.from_pretrained(
         BASE_MODEL_ID,
-        torch_dtype=torch.float16,
+        cache_dir=cache_dir,
+        dtype=torch.float16,
         device_map={"": device},
         token=hf_token,
     )
@@ -35,6 +63,7 @@ def initialize_vlm(device="cpu"):
     model = PeftModel.from_pretrained(
         model=base_model,
         model_id=LORA_MODEL_ID,
+        cache_dir=cache_dir,
         autocast_adapter_dtype=False,
         token=hf_token,
     )

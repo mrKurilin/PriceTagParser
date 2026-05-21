@@ -38,6 +38,7 @@ recognition_dir="$script_dir/priceTagRecognition"
 recognition_script="$recognition_dir/price_tag_recognition/demo_track.py"
 python_bin=${PRICE_TAG_RECOGNITION_PYTHON:-python3}
 ckpt_file=${PRICE_TAG_RECOGNITION_CKPT:-}
+hf_cache_dir=${HF_HOME:-$recognition_dir/.huggingface-cache}
 
 if [ -z "$ckpt_file" ]; then
     ckpt_file="$recognition_dir/weights/yolo/weights/best.pt"
@@ -61,6 +62,7 @@ visualization_file=${PRICE_TAG_RECOGNITION_OUT_VIDEO:-}
 
 log "Recognition directory: $recognition_dir"
 log "Recognition checkpoint: $ckpt_file"
+log "Hugging Face cache: $hf_cache_dir"
 log "Output CSV: $output_file"
 
 set -- \
@@ -78,8 +80,12 @@ fi
 log "Starting ML/CV recognition"
 (
     cd "$recognition_dir"
+    mkdir -p "$hf_cache_dir"
     PYTHONUNBUFFERED=1
-    export PYTHONUNBUFFERED
+    HF_HOME="$hf_cache_dir"
+    HF_HUB_CACHE=${HF_HUB_CACHE:-$hf_cache_dir/hub}
+    TRANSFORMERS_CACHE=${TRANSFORMERS_CACHE:-$hf_cache_dir/transformers}
+    export PYTHONUNBUFFERED HF_HOME HF_HUB_CACHE TRANSFORMERS_CACHE
     exec "$python_bin" "$@"
 ) &
 recognition_pid=$!
